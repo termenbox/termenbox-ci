@@ -21,10 +21,13 @@ runs:
         for v in "$SHA" "$BASE"; do case "$v" in *[!0-9a-f]*) echo "bad sha"; exit 1;; esac; done
         [ -n "$SHA" ] || { echo "no sha"; exit 1; }
         url="https://x-access-token:${TOKEN}@github.com/termenbox/termenbox.git"
+        err=$(mktemp)
+        command -v git >/dev/null || { echo "git is not installed in this job"; exit 1; }
+        git config --global --add safe.directory '*' 2>/dev/null || true
         {
           git init -q "$DEST" && cd "$DEST"
           if [ "$DEPTH" = 0 ]; then d=""; else d="--depth=$DEPTH"; fi
           git -c credential.helper= fetch -q --no-tags $d "$url" "$SHA" ${BASE:+"$BASE"}
           git checkout -q FETCH_HEAD
-        } >/dev/null 2>&1 || { echo "checkout failed"; exit 1; }
+        } >/dev/null 2>"$err" || { echo "checkout failed:"; sed "s#${TOKEN}#***#g" "$err" | head -3; exit 1; }
         echo "checked out $SHA"
