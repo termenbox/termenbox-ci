@@ -4,6 +4,8 @@ inputs:
   sha: { description: Commit to check out, required: true }
   token: { description: Read-only token for the private repo, required: true }
   path: { description: Directory to clone into, default: . }
+  depth: { description: "Fetch depth; 0 fetches the whole history", default: "1" }
+  base: { description: Extra commit to fetch (the base of a pull request), default: "" }
 runs:
   using: composite
   steps:
@@ -11,13 +13,18 @@ runs:
       env:
         TOKEN: ${{ inputs.token }}
         SHA: ${{ inputs.sha }}
+        BASE: ${{ inputs.base }}
         DEST: ${{ inputs.path }}
+        DEPTH: ${{ inputs.depth }}
       run: |
         set +x
-        case "$SHA" in *[!0-9a-f]*|"") echo "bad sha"; exit 1;; esac
+        for v in "$SHA" "$BASE"; do case "$v" in *[!0-9a-f]*) echo "bad sha"; exit 1;; esac; done
+        [ -n "$SHA" ] || { echo "no sha"; exit 1; }
+        url="https://x-access-token:${TOKEN}@github.com/termenbox/termenbox.git"
         {
           git init -q "$DEST" && cd "$DEST"
-          git -c credential.helper= fetch -q --depth=1 "https://x-access-token:${TOKEN}@github.com/termenbox/termenbox.git" "$SHA"
+          if [ "$DEPTH" = 0 ]; then d=""; else d="--depth=$DEPTH"; fi
+          git -c credential.helper= fetch -q --no-tags $d "$url" "$SHA" ${BASE:+"$BASE"}
           git checkout -q FETCH_HEAD
         } >/dev/null 2>&1 || { echo "checkout failed"; exit 1; }
         echo "checked out $SHA"
