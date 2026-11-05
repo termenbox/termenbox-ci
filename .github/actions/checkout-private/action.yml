@@ -6,6 +6,7 @@ inputs:
   path: { description: Directory to clone into, default: . }
   depth: { description: "Fetch depth; 0 fetches the whole history", default: "1" }
   base: { description: Extra commit to fetch (the base of a pull request), default: "" }
+  branch: { description: "Branch whose head is taken when no sha is given", default: develop }
   remote: { description: "Keep an origin remote and a repo-local auth header for steps that fetch more (git fetch origin master); the header sits in .git/config", default: "false" }
 runs:
   using: composite
@@ -18,12 +19,13 @@ runs:
         DEST: ${{ inputs.path }}
         DEPTH: ${{ inputs.depth }}
         REMOTE: ${{ inputs.remote }}
+        BRANCH: ${{ inputs.branch }}
       run: |
         set +x
         for v in "$SHA" "$BASE"; do case "$v" in *[!0-9a-f]*) echo "bad sha"; exit 1;; esac; done
         url="https://x-access-token:${TOKEN}@github.com/termenbox/termenbox.git"
-        # a scheduled or manual run has no commit in its payload: take the head of develop
-        if [ -z "$SHA" ]; then SHA=$(git ls-remote "$url" refs/heads/develop 2>/dev/null | cut -f1); fi
+        # a scheduled or manual run has no commit in its payload: take the head of the branch (develop by default)
+        if [ -z "$SHA" ]; then SHA=$(git ls-remote "$url" "refs/heads/$BRANCH" 2>/dev/null | cut -f1); fi
         [ -n "$SHA" ] || { echo "no sha"; exit 1; }
         err=$(mktemp)
         command -v git >/dev/null || { echo "git is not installed in this job"; exit 1; }

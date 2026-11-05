@@ -50,6 +50,7 @@ jobs:
           depth: 0
           base: ${{ github.event.client_payload.base }}
           remote: true
+          branch: master
       - id: g
         env:
           GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
