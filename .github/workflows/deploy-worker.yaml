@@ -27,7 +27,7 @@ jobs:
         id: deploy
         working-directory: worker
         run: |
-          out=$(npx --yes wrangler@3.114.0 deploy 2>&1) || { echo "deploy failed"; printf '%s\n' "$out" | grep -v 'npm warn' | sed -E 's/[0-9a-f]{32}/<id>/g' | head -8 | cut -c1-200; exit 1; }
+          out=$(npx --yes wrangler@3.114.0 deploy 2>&1) || { echo "deploy failed"; printf '%s\n' "$out" | grep -iE 'error|✘|code:|authenticat|permission|account' | grep -v WARNING | sed -E 's/[0-9a-f]{32}/<id>/g' | head -8 | cut -c1-200; exit 1; }
           url=$(printf '%s\n' "$out" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | head -n1)
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "worker: $url"
