@@ -1,0 +1,37 @@
+name: leak-test
+# Proves the silent shell: prints a canary and a line of the private source, then fails. The public log must show
+# neither (checked by `sh scripts/private-ci-plan-check.sh --leak` in the private repo's plan).
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: quiet {0}
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
+      - name: Resolve develop
+        id: sha
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+        run: echo "sha=$(gh api repos/termenbox/termenbox/commits/develop -q .sha 2>/dev/null)" >> "$GITHUB_OUTPUT"
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
+        with:
+          sha: ${{ steps.sha.outputs.sha }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+          path: src
+      - name: Print a canary and a source line, then fail
+        run: |
+          echo "CANARY-9f3a71"
+          head -n 3 src/CLAUDE.md
+          cargo --definitely-not-a-flag
+      - if: always()
+        uses: termenbox/termenbox-ci/.github/actions/finish@main
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: leak

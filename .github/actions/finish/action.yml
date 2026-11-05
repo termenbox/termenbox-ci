@@ -1,0 +1,21 @@
+name: Finish a silent job
+description: Encrypts the job's quiet log and uploads it, so a failure is readable by the owner only.
+inputs:
+  key: { description: Log passphrase, required: true }
+  name: { description: Artifact name stem, required: true }
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        LOG_KEY: ${{ inputs.key }}
+      run: |
+        f="$RUNNER_TEMP/quiet.log"; [ -f "$f" ] || : > "$f"
+        openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:LOG_KEY -in "$f" -out "$RUNNER_TEMP/quiet.log.enc" 2>/dev/null
+        rm -f "$f"
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      with:
+        name: ${{ inputs.name }}-log-encrypted
+        path: ${{ runner.temp }}/quiet.log.enc
+        retention-days: 7
+        if-no-files-found: ignore

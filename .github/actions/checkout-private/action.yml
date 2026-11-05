@@ -1,0 +1,23 @@
+name: Check out the private source
+description: Clones termenbox/termenbox at a sha with a read-only token, silently, and keeps no credentials.
+inputs:
+  sha: { description: Commit to check out, required: true }
+  token: { description: Read-only token for the private repo, required: true }
+  path: { description: Directory to clone into, default: . }
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        TOKEN: ${{ inputs.token }}
+        SHA: ${{ inputs.sha }}
+        DEST: ${{ inputs.path }}
+      run: |
+        set +x
+        case "$SHA" in *[!0-9a-f]*|"") echo "bad sha"; exit 1;; esac
+        {
+          git init -q "$DEST" && cd "$DEST"
+          git -c credential.helper= fetch -q --depth=1 "https://x-access-token:${TOKEN}@github.com/termenbox/termenbox.git" "$SHA"
+          git checkout -q FETCH_HEAD
+        } >/dev/null 2>&1 || { echo "checkout failed"; exit 1; }
+        echo "checked out $SHA"

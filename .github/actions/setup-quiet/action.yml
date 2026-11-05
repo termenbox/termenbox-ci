@@ -1,0 +1,10 @@
+name: Setup silent shell
+description: Installs scripts/quiet.sh as the `quiet` command used as defaults.run.shell.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        sudo curl -fsSL -o /usr/local/bin/quiet "https://raw.githubusercontent.com/termenbox/termenbox-ci/${{ github.sha }}/scripts/quiet.sh" 2>/dev/null \
+          || sudo curl -fsSL -o /usr/local/bin/quiet "https://raw.githubusercontent.com/termenbox/termenbox-ci/main/scripts/quiet.sh"
+        sudo chmod 755 /usr/local/bin/quiet
