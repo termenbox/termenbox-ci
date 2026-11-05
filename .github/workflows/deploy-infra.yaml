@@ -40,6 +40,7 @@ jobs:
     environment: cloud
     defaults:
       run:
+        shell: quiet {0}
         working-directory: ${{ env.TF_WORKING_DIR }}
 
     steps:
