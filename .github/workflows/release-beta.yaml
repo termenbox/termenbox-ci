@@ -45,6 +45,7 @@ jobs:
           token: ${{ secrets.SOURCE_TOKEN }}
           depth: 0
           base: ${{ github.event.client_payload.base }}
+          remote: true
       - id: g
         env:
           DISPATCH_VERSION: ${{ inputs.version }}

@@ -60,6 +60,7 @@ jobs:
           token: ${{ secrets.SOURCE_TOKEN }}
           depth: 0
           base: ${{ github.event.client_payload.base }}
+          remote: true
       - id: s
         env:
           GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
@@ -178,6 +179,7 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
       - name: Delete nightlies older than 14 days (never the alias target)
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}

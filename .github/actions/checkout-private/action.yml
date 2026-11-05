@@ -6,6 +6,7 @@ inputs:
   path: { description: Directory to clone into, default: . }
   depth: { description: "Fetch depth; 0 fetches the whole history", default: "1" }
   base: { description: Extra commit to fetch (the base of a pull request), default: "" }
+  remote: { description: "Keep an origin remote and a repo-local auth header for steps that fetch more (git fetch origin master); the header sits in .git/config", default: "false" }
 runs:
   using: composite
   steps:
@@ -16,6 +17,7 @@ runs:
         BASE: ${{ inputs.base }}
         DEST: ${{ inputs.path }}
         DEPTH: ${{ inputs.depth }}
+        REMOTE: ${{ inputs.remote }}
       run: |
         set +x
         for v in "$SHA" "$BASE"; do case "$v" in *[!0-9a-f]*) echo "bad sha"; exit 1;; esac; done
@@ -31,5 +33,9 @@ runs:
           if [ "$DEPTH" = 0 ]; then d=""; else d="--depth=$DEPTH"; fi
           git -c credential.helper= fetch -q --no-tags $d "$url" "$SHA" ${BASE:+"$BASE"}
           git checkout -q FETCH_HEAD
+          if [ "$REMOTE" = true ]; then
+            git remote add origin https://github.com/termenbox/termenbox.git
+            git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          fi
         } >/dev/null 2>"$err" || { echo "checkout failed:"; sed "s#${TOKEN}#***#g" "$err" | head -3; exit 1; }
         echo "checked out $SHA"
