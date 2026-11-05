@@ -6,4 +6,4 @@ runs:
     - shell: bash
       run: |
         SUDO=""; [ "$(id -u)" = 0 ] || SUDO=sudo
-        $SUDO install -m 755 "${{ github.action_path }}/../../../scripts/quiet.sh" /usr/local/bin/quiet
+        $SUDO install -m 755 "$GITHUB_ACTION_PATH/../../../scripts/quiet.sh" /usr/local/bin/quiet
