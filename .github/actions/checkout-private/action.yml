@@ -1,7 +1,7 @@
 name: Check out the private source
 description: Clones termenbox/termenbox at a sha with a read-only token, silently, and keeps no credentials.
 inputs:
-  sha: { description: Commit to check out, required: true }
+  sha: { description: "Commit to check out; empty means the head of develop", default: "" }
   token: { description: Read-only token for the private repo, required: true }
   path: { description: Directory to clone into, default: . }
   depth: { description: "Fetch depth; 0 fetches the whole history", default: "1" }
@@ -19,8 +19,10 @@ runs:
       run: |
         set +x
         for v in "$SHA" "$BASE"; do case "$v" in *[!0-9a-f]*) echo "bad sha"; exit 1;; esac; done
-        [ -n "$SHA" ] || { echo "no sha"; exit 1; }
         url="https://x-access-token:${TOKEN}@github.com/termenbox/termenbox.git"
+        # a scheduled or manual run has no commit in its payload: take the head of develop
+        if [ -z "$SHA" ]; then SHA=$(git ls-remote "$url" refs/heads/develop 2>/dev/null | cut -f1); fi
+        [ -n "$SHA" ] || { echo "no sha"; exit 1; }
         err=$(mktemp)
         command -v git >/dev/null || { echo "git is not installed in this job"; exit 1; }
         git config --global --add safe.directory '*' 2>/dev/null || true
