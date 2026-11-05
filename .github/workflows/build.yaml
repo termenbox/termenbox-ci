@@ -1,6 +1,6 @@
 name: Build private source
 
-# Public harness. The source lives in termenbox/termenbox (private) and is read with a read-only deploy key.
+# Public harness. The source lives in termenbox/termenbox (private) and is read with a read-only fine-grained token (SOURCE_TOKEN).
 # Public logs must never carry source: every step's output goes to a file, the job log shows only exit codes,
 # and the file is uploaded encrypted (openssl, key in LOG_KEY). Never add a pull_request trigger: a fork PR
 # could change this file and print the checkout.
@@ -23,16 +23,13 @@ jobs:
     steps:
       - name: Check out private source
         env:
-          KEY: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          TOKEN: ${{ secrets.SOURCE_TOKEN }}
           REF: ${{ github.event.inputs.ref || github.event.client_payload.ref || 'develop' }}
         run: |
           set +x
-          mkdir -p ~/.ssh && umask 077 && printf '%s\n' "$KEY" > ~/.ssh/src && chmod 600 ~/.ssh/src
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          GIT_SSH_COMMAND='ssh -i ~/.ssh/src -o IdentitiesOnly=yes' \
-            git clone --quiet git@github.com:termenbox/termenbox.git src >/dev/null 2>&1
+          git -c credential.helper= clone --quiet "https://x-access-token:${TOKEN}@github.com/termenbox/termenbox.git" src >/dev/null 2>&1
+          git -C src remote set-url origin https://github.com/termenbox/termenbox.git
           git -C src checkout --quiet "$REF" >/dev/null 2>&1
-          rm -f ~/.ssh/src
           echo "checked out ${REF}"
       - name: Build and test (output withheld)
         id: run
