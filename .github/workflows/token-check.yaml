@@ -18,6 +18,7 @@ jobs:
       BETA_RELEASE_TOKEN: ${{ secrets.BETA_RELEASE_TOKEN }}
       STABLE_RELEASE_TOKEN: ${{ secrets.STABLE_RELEASE_TOKEN }}
       CF_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+      CF_ACCOUNT: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       LOG_KEY: ${{ secrets.LOG_KEY }}
     steps:
       - name: Check every token
@@ -50,7 +51,8 @@ jobs:
             if [ -n "$id" ]; then expect "${ch}_RELEASE_TOKEN deletes it again" "$(api "$t" DELETE repos/$SRC/releases/$id)" 204; fi
           done
 
-          v=$(curl -s -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)
+          if [ -n "$CF_ACCOUNT" ]; then ep="accounts/$CF_ACCOUNT/tokens/verify"; else ep="user/tokens/verify"; fi
+          v=$(curl -s -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/$ep")
           printf '%s' "$v" | grep -q '"status":"active"' && echo "pass  CLOUDFLARE_WORKERS_TOKEN is active" || { echo "FAIL  CLOUDFLARE_WORKERS_TOKEN not active"; fail=1; }
           [ "${#LOG_KEY}" -ge 32 ] && echo "pass  LOG_KEY has 32+ characters" || { echo "FAIL  LOG_KEY is short or missing"; fail=1; }
           exit $fail
