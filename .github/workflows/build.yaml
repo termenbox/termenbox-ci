@@ -1,0 +1,59 @@
+name: Build private source
+
+# Public harness. The source lives in termenbox/termenbox (private) and is read with a read-only deploy key.
+# Public logs must never carry source: every step's output goes to a file, the job log shows only exit codes,
+# and the file is uploaded encrypted (openssl, key in LOG_KEY). Never add a pull_request trigger: a fork PR
+# could change this file and print the checkout.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit of the private repo
+        default: develop
+  repository_dispatch:
+    types: [source-pushed]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out private source
+        env:
+          KEY: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          REF: ${{ github.event.inputs.ref || github.event.client_payload.ref || 'develop' }}
+        run: |
+          set +x
+          mkdir -p ~/.ssh && umask 077 && printf '%s\n' "$KEY" > ~/.ssh/src && chmod 600 ~/.ssh/src
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          GIT_SSH_COMMAND='ssh -i ~/.ssh/src -o IdentitiesOnly=yes' \
+            git clone --quiet git@github.com:termenbox/termenbox.git src >/dev/null 2>&1
+          git -C src checkout --quiet "$REF" >/dev/null 2>&1
+          rm -f ~/.ssh/src
+          echo "checked out ${REF}"
+      - name: Build and test (output withheld)
+        id: run
+        working-directory: src
+        run: |
+          set +e
+          { cargo build --workspace --release && cargo test --workspace \
+            && pnpm install --frozen-lockfile && pnpm -r build && pnpm -r test; } > ../build.log 2>&1
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+      - name: Encrypt log
+        if: always()
+        env:
+          LOG_KEY: ${{ secrets.LOG_KEY }}
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:LOG_KEY -in build.log -out build.log.enc 2>/dev/null || true
+          rm -f build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log-encrypted
+          path: build.log.enc
+          retention-days: 7
+      - name: Result
+        run: test "${{ steps.run.outputs.exit }}" = 0
