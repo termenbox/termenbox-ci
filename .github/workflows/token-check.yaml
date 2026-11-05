@@ -70,4 +70,7 @@ jobs:
           expect "RELEASE_TOKEN creates a draft release" "$code" 201
           id=$(sed -n 's/^  "id": *\([0-9]*\),.*/\1/p' rel.json | head -n1); rm -f rel.json
           [ -z "$id" ] || expect "RELEASE_TOKEN deletes it again" "$(api DELETE "repos/$SRC/releases/$id")" 204
+          scopes=$(curl -s -D - -o /dev/null -H "Authorization: Bearer $T" https://api.github.com/user | tr -d '\r' | sed -n 's/^[Xx]-[Oo][Aa]uth-[Ss]copes: *//p')
+          if [ -z "$scopes" ]; then echo "info  no scope header (fine-grained token): it cannot push packages"; fail=1; else
+            case ",$(printf '%s' "$scopes" | tr -d ' ')," in *,write:packages,*) echo "pass  RELEASE_TOKEN has write:packages";; *) echo "FAIL  RELEASE_TOKEN lacks write:packages (scopes: $scopes)"; fail=1;; esac; fi
           exit $fail
