@@ -1,0 +1,56 @@
+name: token-check
+# Calls the GitHub and Cloudflare APIs with each token and prints pass or fail per token, never a value or a body.
+# Positive checks prove a token can do its job; negative checks prove it cannot do more.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SRC: termenbox/termenbox
+      SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+      STATUS_TOKEN: ${{ secrets.STATUS_TOKEN }}
+      DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+      NIGHTLY_RELEASE_TOKEN: ${{ secrets.NIGHTLY_RELEASE_TOKEN }}
+      BETA_RELEASE_TOKEN: ${{ secrets.BETA_RELEASE_TOKEN }}
+      STABLE_RELEASE_TOKEN: ${{ secrets.STABLE_RELEASE_TOKEN }}
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+      LOG_KEY: ${{ secrets.LOG_KEY }}
+    steps:
+      - name: Check every token
+        run: |
+          fail=0
+          # api <token> <method> <path> [json] -> prints the http code only
+          api() { curl -s -o /dev/null -w '%{http_code}' -X "$2" -H "Authorization: Bearer $1" -H 'Accept: application/vnd.github+json' ${4:+-H 'Content-Type: application/json' -d "$4"} "https://api.github.com/$3"; }
+          expect() { # expect <label> <got> <want-regex>
+            if printf '%s' "$2" | grep -Eq "^($3)$"; then echo "pass  $1"; else echo "FAIL  $1 (got $2)"; fail=1; fi
+          }
+          sha=$(curl -s -H "Authorization: Bearer $SOURCE_TOKEN" "https://api.github.com/repos/$SRC/commits/develop" | sed -n 's/.*"sha": *"\([0-9a-f]\{40\}\)".*/\1/p' | head -n1)
+          [ -n "$sha" ] || { echo "FAIL  SOURCE_TOKEN cannot read develop"; exit 1; }
+
+          expect "SOURCE_TOKEN reads contents"             "$(api "$SOURCE_TOKEN" GET repos/$SRC/contents/package.json)" 200
+          expect "SOURCE_TOKEN cannot write statuses"      "$(api "$SOURCE_TOKEN" POST repos/$SRC/statuses/$sha '{"state":"success","context":"token-check"}')" '403|404'
+
+          expect "STATUS_TOKEN lists pull requests"        "$(api "$STATUS_TOKEN" GET "repos/$SRC/pulls?per_page=1")" 200
+          expect "STATUS_TOKEN writes a status"            "$(api "$STATUS_TOKEN" POST repos/$SRC/statuses/$sha '{"state":"success","context":"token-check","description":"token check"}')" 201
+          expect "STATUS_TOKEN cannot read contents"       "$(api "$STATUS_TOKEN" GET repos/$SRC/contents/package.json)" '403|404'
+
+          expect "DISPATCH_TOKEN dispatches to the ci repo" "$(api "$DISPATCH_TOKEN" POST repos/termenbox/termenbox-ci/dispatches '{"event_type":"token-check"}')" 204
+          expect "DISPATCH_TOKEN cannot see the private repo" "$(api "$DISPATCH_TOKEN" GET repos/$SRC)" '403|404'
+
+          for ch in NIGHTLY BETA STABLE; do
+            eval "t=\$${ch}_RELEASE_TOKEN"
+            expect "${ch}_RELEASE_TOKEN lists releases"    "$(api "$t" GET "repos/$SRC/releases?per_page=1")" 200
+            code=$(curl -s -o rel.json -w '%{http_code}' -X POST -H "Authorization: Bearer $t" -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/json' -d "{\"tag_name\":\"token-check-$GITHUB_RUN_ID-$ch\",\"draft\":true,\"name\":\"token check\"}" "https://api.github.com/repos/$SRC/releases")
+            expect "${ch}_RELEASE_TOKEN creates a draft release" "$code" 201
+            id=$(sed -n 's/^  "id": *\([0-9]*\),.*/\1/p' rel.json | head -n1); rm -f rel.json
+            if [ -n "$id" ]; then expect "${ch}_RELEASE_TOKEN deletes it again" "$(api "$t" DELETE repos/$SRC/releases/$id)" 204; fi
+          done
+
+          v=$(curl -s -H "Authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)
+          printf '%s' "$v" | grep -q '"status":"active"' && echo "pass  CLOUDFLARE_WORKERS_TOKEN is active" || { echo "FAIL  CLOUDFLARE_WORKERS_TOKEN not active"; fail=1; }
+          [ "${#LOG_KEY}" -ge 32 ] && echo "pass  LOG_KEY has 32+ characters" || { echo "FAIL  LOG_KEY is short or missing"; fail=1; }
+          exit $fail

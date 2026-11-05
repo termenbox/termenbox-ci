@@ -1,0 +1,48 @@
+name: deploy-worker
+# Deploys worker/ to the owner's Cloudflare account and sets its two secrets. Output of wrangler is not printed:
+# only the Worker URL (public, protected by the webhook signature) is.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['worker/**', '.github/workflows/deploy-worker.yaml']
+permissions:
+  contents: read
+concurrency:
+  group: deploy-worker
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Test the event mapping
+        run: node worker/test.mjs
+      - name: Deploy
+        id: deploy
+        working-directory: worker
+        run: |
+          out=$(npx --yes wrangler@3.114.0 deploy 2>&1) || { echo "deploy failed"; echo "$out" | sed -n '1,3p' | cut -c1-160; exit 1; }
+          url=$(printf '%s\n' "$out" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | head -n1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "worker: $url"
+      - name: Set the Worker secrets
+        working-directory: worker
+        env:
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+        run: |
+          printf '%s' "$WEBHOOK_SECRET" | npx --yes wrangler@3.114.0 secret put WEBHOOK_SECRET >/dev/null 2>&1 || { echo "secret WEBHOOK_SECRET failed"; exit 1; }
+          printf '%s' "$DISPATCH_TOKEN" | npx --yes wrangler@3.114.0 secret put DISPATCH_TOKEN >/dev/null 2>&1 || { echo "secret DISPATCH_TOKEN failed"; exit 1; }
+          echo "secrets set"
+      - name: Health
+        run: |
+          sleep 5
+          code=$(curl -s -o /dev/null -w '%{http_code}' "${{ steps.deploy.outputs.url }}/health")
+          echo "health: $code"
+          [ "$code" = 200 ]

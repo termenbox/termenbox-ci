@@ -1,0 +1,17 @@
+// node worker/test.mjs : the event mapping, offline.
+import assert from "node:assert/strict";
+import { plan } from "./index.js";
+const repo = { full_name: "termenbox/termenbox" };
+const A = "a".repeat(40), B = "b".repeat(40), Z = "0".repeat(40);
+assert.deepEqual(plan("push", { repository: repo, ref: "refs/heads/develop", after: A, before: B }), { event: "push", sha: A, base: B, pr: "" });
+assert.equal(plan("push", { repository: repo, ref: "refs/heads/feature/x", after: A, before: B }), null);
+assert.equal(plan("push", { repository: repo, ref: "refs/heads/develop", after: Z, before: B }), null);
+assert.equal(plan("push", { repository: repo, ref: "refs/tags/v1.2.3", after: A, before: Z }).event, "tag");
+assert.equal(plan("push", { repository: { full_name: "evil/x" }, ref: "refs/heads/develop", after: A }), null);
+const pr = (head, action = "opened") => ({ repository: repo, action, pull_request: { number: 7, head: { sha: A, repo: head }, base: { sha: B, ref: "develop" } } });
+assert.deepEqual(plan("pull_request", pr(repo)), { event: "pull_request", sha: A, base: B, pr: "7" });
+assert.equal(plan("pull_request", pr({ full_name: "fork/termenbox" })), null);
+assert.equal(plan("pull_request", pr(repo, "closed")), null);
+assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 3, pull_request: {} }, comment: { id: 9, body: "/regen" } }).event, "comment");
+assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 3, pull_request: {} }, comment: { id: 9, body: "hello" } }), null);
+console.log("worker plan: ok");

@@ -1,0 +1,4 @@
+name = "termenbox-ci-hook"
+main = "index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
