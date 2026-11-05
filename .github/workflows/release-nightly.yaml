@@ -65,6 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
           GH_REPO: termenbox/termenbox
+          STATUS_TOKEN: ${{ secrets.STATUS_TOKEN }}
           EVENT: ${{ (github.event.client_payload.event || github.event_name) }}
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           DISPATCH_PUBLISH: ${{ inputs.publish }}
@@ -74,7 +75,7 @@ jobs:
             sha="$RUN_SHA"
           else
             sha=""; for c in $(gh api "repos/termenbox/termenbox/commits?sha=develop&per_page=30" --jq '.[].sha'); do
-            n="$(gh api "repos/termenbox/termenbox/commits/$c/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
+            n="$(GH_TOKEN="$STATUS_TOKEN" gh api "repos/termenbox/termenbox/commits/$c/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
             if [ "${n:-0}" -gt 0 ]; then sha="$c"; break; fi
           done
           fi
