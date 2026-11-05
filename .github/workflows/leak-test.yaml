@@ -27,7 +27,7 @@ jobs:
           path: src
       - name: Print a canary and a source line, then fail
         run: |
-          echo "CANARY-9f3a71"
+          echo "CANARY-$(printf %s 9f3a71)"
           head -n 3 src/CLAUDE.md
           cargo --definitely-not-a-flag
       - if: always()
