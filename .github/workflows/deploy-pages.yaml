@@ -10,6 +10,20 @@ name: Deploy to Cloudflare Pages
 # Run by hand it builds and deploys the chosen channel from the ref it is run on.
 
 on:
+  workflow_call:
+    inputs:
+      channel:
+        description: 'stable, beta or nightly'
+        type: string
+        required: true
+      sha:
+        description: 'Commit to build (default: the calling workflow commit)'
+        type: string
+        default: ''
+      version:
+        description: 'Version the app shows (default: packages/server/Cargo.toml)'
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       channel:

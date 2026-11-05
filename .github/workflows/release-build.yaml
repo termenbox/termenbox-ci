@@ -18,8 +18,19 @@ name: Release build
 # branch wrote them. Look for "Cache hit" in the log of the two restore steps.
 
 on:
-  repository_dispatch:
-    types: [source-pushed]
+  workflow_call:
+    inputs:
+      channel: { description: 'stable, beta or nightly; also the GitHub Environment that holds the signing key', required: true, type: string }
+      kid: { description: 'id of the channel signing key in release-keys.txt (r1, b1, n1)', required: true, type: string }
+      version: { description: 'manifest version, full SemVer', required: true, type: string }
+      tag: { description: 'release tag the assets are published under', required: true, type: string }
+      sha: { description: 'commit to build', required: true, type: string }
+      publish: { description: 'create the release and move the aliases', required: true, type: boolean }
+      prerelease: { required: true, type: boolean }
+      latest: { description: 'GitHub marks it as the latest release (only stable)', required: true, type: boolean }
+      aliases: { description: 'space separated rolling releases that may point at it', required: false, type: string, default: '' }
+      deploy: { description: 'deploy the channel client after publishing, in the same approved job (stable and beta)', required: false, type: boolean, default: false }
+      notes: { description: 'text put before the generated release notes', required: false, type: string, default: '' }
 
 permissions:
   contents: read
