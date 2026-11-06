@@ -68,6 +68,7 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
 
       # A dry run may use any version (the default is 0.0.0); the gates of the wrappers hold a published one to the tag.
       - name: The version has the Cargo.toml version as its core
@@ -174,6 +175,10 @@ jobs:
   # Every channel starts docker-build.yaml beside this workflow (a tag starts it for stable and beta, release-nightly.yaml
   # calls it), so the image may still be building: wait for the multi-architecture tag and record the digests the signed
   # manifest will name (decision 0155). It holds no secret. A dry run pushes none.
+  # The build is not a job this one needs, so while it waits the script asks whether that build already failed or was
+  # cancelled and then stops at once (the 70 minutes stay as the backstop): for a nightly the "Image / " jobs of this run,
+  # for a stable or beta tag the newest docker-build run titled "Image <tag>" (its run-name). The manifest job needs this
+  # one, so a failed image build leaves it skipped and nothing is published.
   image:
     name: Image digests
     needs: build
@@ -182,6 +187,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     permissions:
+      actions: read
       contents: read
       packages: read
     steps:
@@ -191,6 +197,7 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
@@ -200,7 +207,12 @@ jobs:
       - name: Wait for the image of this version and read its digests
         env:
           VERSION: ${{ inputs.version }}
-        run: python3 .github/scripts/image_digests.py "ghcr.io/termenbox/termenbox:${VERSION}" image-digests.json --wait 4200
+          TAG: ${{ inputs.tag }}
+          CHANNEL: ${{ inputs.channel }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$CHANNEL" = nightly ]; then flag=--build-jobs; what="Image / "; else flag=--build-run; what="Image $TAG"; fi
+          python3 .github/scripts/image_digests.py "ghcr.io/termenbox/termenbox:${VERSION}" image-digests.json --wait 4200 "$flag" "$what"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-image
@@ -220,13 +232,16 @@ jobs:
     if: ${{ !cancelled() && needs.build.result == 'success' && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Pointer moves are one read and two writes with a forward-only check between them, so two runs that can move the same
-    # pointer must not overlap: stable and beta share the beta pointer (a stable release moves it too), nightly has its own,
-    # and a freeze (release-freeze.yaml) is in the same groups. A run behind another waits; a third replaces the one that
-    # is still waiting (GitHub keeps one pending run per group), which is run again by hand. That is the cost of the
-    # group, and releases of one channel are rare and approved one at a time.
+    # Pointer moves are one read and two writes with a forward-only check between them, so two releases that can move the
+    # same pointer must not overlap. A stable release moves the stable and the beta pointer, a beta release the beta one,
+    # a nightly its own: so anything that can write the beta pointer is in r2-pointers-beta, and nothing writes the stable
+    # pointer alone (hence no r2-pointers-stable); nightly is r2-pointers-nightly. A run behind another waits; a newer one
+    # replaces the one still waiting (GitHub keeps one pending run per group), so the newest release of the group wins and
+    # the displaced one is run again by hand. A freeze is NOT in these groups (release-freeze.yaml has its own per channel,
+    # so a release can never displace a waiting freeze); publish_r2.sh's forward-only check, which reads each pointer
+    # right before it writes it, is what keeps a release and a freeze that overlap from moving a pointer backwards.
     concurrency:
-      group: r2-pointers-${{ inputs.channel == 'nightly' && 'nightly' || 'release' }}
+      group: r2-pointers-${{ inputs.channel == 'nightly' && 'nightly' || 'beta' }}
       cancel-in-progress: false
     # The signing key is the secret RELEASE_SIGNING_KEY of this environment, so a channel's key is only ever
     # available to a run of that channel (the build jobs above never see it).
@@ -248,6 +263,7 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:

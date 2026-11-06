@@ -127,6 +127,7 @@ jobs:
     needs: select
     if: needs.select.outputs.run == 'true'
     permissions:
+      actions: read
       contents: write
       deployments: write
       packages: read
@@ -155,6 +156,7 @@ jobs:
       packages: write
       id-token: write
     uses: ./.github/workflows/docker-build.yaml
+    secrets: inherit
     with:
       sha: ${{ needs.select.outputs.sha }}
       version: ${{ needs.select.outputs.version }}

@@ -31,6 +31,10 @@ on:
         type: choice
         options: [stable, beta, nightly]
         default: stable
+      sha:
+        description: 'Commit to build (default: the head of the branch). A staged deploy needs the commit its release tag points to.'
+        type: string
+        default: ''
       tag:
         description: 'Release tag holding a staged client bundle and its owner signature (bundle.json.sig): deploys exactly those bytes. Needed for a channel with a pinned bundle key.'
         type: string
@@ -67,6 +71,7 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
 
       # A staged bundle is deployed as it is, after its owner signature verifies (the action checks it).
       - name: Fetch the staged bundle

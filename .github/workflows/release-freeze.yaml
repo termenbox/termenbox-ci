@@ -40,11 +40,13 @@ defaults:
   run:
     shell: quiet {0}
 
-# One group with the release publishes that move the same pointers (release-build.yaml): stable and beta share the beta
-# pointer, nightly has its own. A run waiting behind another is queued, not cancelled; a third run replaces the one that
-# is still waiting, which is a freeze to run again.
+# A group of its own per channel, never the release's (r2-pointers-*): a freeze must not wait in the one pending slot of
+# a release's group and be replaced by a later release. Two freezes of one channel queue (a third replaces the one still
+# waiting, which is a freeze to run again). A freeze and a release that overlap on a pointer are kept apart by
+# publish_r2.sh alone: it reads the pointer right before writing it and writes only a newer version, and a freeze reads
+# its channel's pointer back and fails unless it holds the freeze, so a displaced freeze is a red run to repeat.
 concurrency:
-  group: r2-pointers-${{ inputs.channel == 'nightly' && 'nightly' || 'release' }}
+  group: r2-freeze-${{ inputs.channel }}
   cancel-in-progress: false
 
 env:
