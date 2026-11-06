@@ -40,9 +40,12 @@ export function plan(event, p) {
     return { event: "pull_request", sha: pr.head.sha, base: pr.base.sha, pr: String(pr.number) };
   }
   if (event === "issue_comment") {
-    if (p.action !== "created" || !p.issue || !p.issue.pull_request) return null;
+    if (p.action !== "created" || !p.issue) return null;
     if (!String(p.comment && p.comment.body).startsWith("/")) return null;
-    return { event: "comment", sha: "", base: "", pr: String(p.issue.number), comment_id: String(p.comment.id) };
+    if (p.issue.pull_request) return { event: "comment", sha: "", base: "", pr: String(p.issue.number), comment_id: String(p.comment.id) };
+    // A docs-media review issue: only its number and the comment id leave here; the workflow fetches the author and text itself.
+    if (!(p.issue.labels || []).some((l) => l && l.name === "docs-media")) return null;
+    return { event: "issue_comment", sha: "", base: "", pr: "", issue: String(p.issue.number), comment_id: String(p.comment.id) };
   }
   return null;
 }
