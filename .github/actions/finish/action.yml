@@ -37,7 +37,7 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.log-token }}
-        GH_REPO: termenbox/termenbox
+        GH_REPO: termenbox/termenbox-source
         SCRUB_SECRETS: ${{ inputs.secrets }}
         LOG_KEY: ${{ inputs.key }}
         JOB: ${{ github.job }}

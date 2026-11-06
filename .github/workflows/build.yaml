@@ -1,6 +1,6 @@
 name: Build private source
 
-# Public harness. The source lives in termenbox/termenbox (private) and is read with a read-only fine-grained token (SOURCE_TOKEN).
+# Public harness. The source lives in termenbox/termenbox-source (private) and is read with a read-only fine-grained token (SOURCE_TOKEN).
 # Public logs must never carry source: every step's output goes to a file, the job log shows only exit codes,
 # and the file is uploaded encrypted (openssl, key in LOG_KEY). Never add a pull_request trigger: a fork PR
 # could change this file and print the checkout.
@@ -27,8 +27,8 @@ jobs:
           REF: ${{ github.event.inputs.ref || github.event.client_payload.ref || 'develop' }}
         run: |
           set +x
-          git -c credential.helper= clone --quiet "https://x-access-token:${TOKEN}@github.com/termenbox/termenbox.git" src >/dev/null 2>&1
-          git -C src remote set-url origin https://github.com/termenbox/termenbox.git
+          git -c credential.helper= clone --quiet "https://x-access-token:${TOKEN}@github.com/termenbox/termenbox-source.git" src >/dev/null 2>&1
+          git -C src remote set-url origin https://github.com/termenbox/termenbox-source.git
           git -C src checkout --quiet "$REF" >/dev/null 2>&1
           echo "checked out ${REF}"
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6

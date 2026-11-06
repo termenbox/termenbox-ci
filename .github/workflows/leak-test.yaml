@@ -19,7 +19,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
-        run: echo "sha=$(gh api repos/termenbox/termenbox/commits/develop -q .sha 2>/dev/null)" >> "$GITHUB_OUTPUT"
+        run: echo "sha=$(gh api repos/termenbox/termenbox-source/commits/develop -q .sha 2>/dev/null)" >> "$GITHUB_OUTPUT"
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
           sha: ${{ steps.sha.outputs.sha }}

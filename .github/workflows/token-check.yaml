@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SRC: termenbox/termenbox
+      SRC: termenbox/termenbox-source
       SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
       STATUS_TOKEN: ${{ secrets.STATUS_TOKEN }}
       DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}

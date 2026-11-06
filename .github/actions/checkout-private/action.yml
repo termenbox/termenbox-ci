@@ -1,5 +1,5 @@
 name: Check out the private source
-description: Clones termenbox/termenbox at a sha with a read-only token, silently, and keeps no credentials.
+description: Clones termenbox/termenbox-source at a sha with a read-only token, silently, and keeps no credentials.
 inputs:
   sha: { description: "Commit to check out; empty means the head of develop", default: "" }
   token: { description: Read-only token for the private repo, required: true }
@@ -23,7 +23,7 @@ runs:
       run: |
         set +x
         for v in "$SHA" "$BASE"; do case "$v" in *[!0-9a-f]*) echo "bad sha"; exit 1;; esac; done
-        url="https://x-access-token:${TOKEN}@github.com/termenbox/termenbox.git"
+        url="https://x-access-token:${TOKEN}@github.com/termenbox/termenbox-source.git"
         # a scheduled or manual run has no commit in its payload: take the head of the branch (develop by default)
         if [ -z "$SHA" ]; then SHA=$(git ls-remote "$url" "refs/heads/$BRANCH" 2>/dev/null | cut -f1); fi
         [ -n "$SHA" ] || { echo "no sha"; exit 1; }
@@ -36,7 +36,7 @@ runs:
           git -c credential.helper= fetch -q --no-tags $d "$url" "$SHA" ${BASE:+"$BASE"}
           git checkout -q FETCH_HEAD
           if [ "$REMOTE" = true ]; then
-            git remote add origin https://github.com/termenbox/termenbox.git
+            git remote add origin https://github.com/termenbox/termenbox-source.git
             git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
           fi
         } >/dev/null 2>"$err" || { echo "checkout failed:"; sed "s#${TOKEN}#***#g" "$err" | head -3; exit 1; }
