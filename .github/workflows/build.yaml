@@ -10,8 +10,6 @@ on:
       ref:
         description: Branch or commit of the source
         default: develop
-  repository_dispatch:
-    types: [source-pushed]
 
 permissions:
   contents: read
