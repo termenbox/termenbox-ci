@@ -1,8 +1,8 @@
-name: Check out the private source
+name: Check out the source
 description: Clones termenbox/termenbox-source at a sha with a read-only token, silently, and keeps no credentials.
 inputs:
   sha: { description: "Commit to check out; empty means the head of develop", default: "" }
-  token: { description: Read-only token for the private repo, required: true }
+  token: { description: Read-only token for the source repo, required: true }
   path: { description: Directory to clone into, default: . }
   depth: { description: "Fetch depth; 0 fetches the whole history", default: "1" }
   base: { description: Extra commit to fetch (the base of a pull request), default: "" }

@@ -1,14 +1,14 @@
-name: Build private source
+name: Build the source
 
-# Public harness. The source lives in termenbox/termenbox-source (private) and is read with a read-only fine-grained token (SOURCE_TOKEN).
+# Public harness. The source is read with a read-only token.
 # Public logs must never carry source: every step's output goes to a file, the job log shows only exit codes,
-# and the file is uploaded encrypted (openssl, key in LOG_KEY). Never add a pull_request trigger: a fork PR
+# and the file is uploaded encrypted. Never add a pull_request trigger: a fork PR
 # could change this file and print the checkout.
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Branch or commit of the private repo
+        description: Branch or commit of the source
         default: develop
   repository_dispatch:
     types: [source-pushed]
@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Check out private source
+      - name: Check out the source
         env:
           TOKEN: ${{ secrets.SOURCE_TOKEN }}
           REF: ${{ github.event.inputs.ref || github.event.client_payload.ref || 'develop' }}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make a failed job of this repo readable from the private source repo, without leaking.
+"""Make a failed job of this repo readable from the source repo, without leaking.
 
 Used by .github/actions/finish on a failure only. Subcommands:
 

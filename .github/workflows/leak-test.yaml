@@ -1,6 +1,5 @@
 name: leak-test
-# Proves the silent shell: prints a canary and a line of the private source, then fails. The public log must show
-# neither (checked by `sh scripts/private-ci-plan-check.sh --leak` in the private repo's plan).
+# Proves the silent shell: prints a canary and a line of the source, then fails. The public log must show neither.
 on:
   workflow_dispatch:
 permissions:

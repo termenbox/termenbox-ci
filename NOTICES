@@ -1,0 +1,19 @@
+Third-party notices
+
+The workflows in this repository run the actions below. They are not copied into this repository: each is fetched
+from its own repository at the pinned commit when a workflow runs, and keeps its own licence.
+
+actions/checkout, actions/setup-node, actions/upload-artifact, actions/download-artifact, actions/cache
+  Licence: MIT. https://github.com/actions
+pnpm/action-setup
+  Licence: MIT. https://github.com/pnpm/action-setup
+dtolnay/rust-toolchain
+  Licence: MIT OR Apache-2.0. https://github.com/dtolnay/rust-toolchain
+Swatinem/rust-cache
+  Licence: LGPL-3.0. https://github.com/Swatinem/rust-cache
+docker/setup-buildx-action, docker/setup-qemu-action, docker/login-action, docker/build-push-action, docker/metadata-action
+  Licence: Apache-2.0. https://github.com/docker
+hashicorp/setup-terraform
+  Licence: MPL-2.0. https://github.com/hashicorp/setup-terraform
+
+The Worker is deployed with Wrangler (Apache-2.0 OR MIT, https://github.com/cloudflare/workers-sdk), fetched at run time.
