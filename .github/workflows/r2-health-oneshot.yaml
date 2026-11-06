@@ -1,0 +1,27 @@
+# One-shot: uploads health.txt to the release bucket, then this file is deleted.
+name: r2-health-oneshot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    environment: nightly
+    steps:
+      - name: Upload health.txt
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+          AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+          ACCOUNT: ${{ vars.R2_RELEASE_ACCOUNT_ID }}
+          BUCKET: ${{ vars.R2_RELEASE_BUCKET }}
+        run: |
+          printf ok > health.txt
+          aws s3 cp health.txt "s3://$BUCKET/health.txt" --content-type text/plain \
+            --endpoint-url "https://$ACCOUNT.r2.cloudflarestorage.com"
