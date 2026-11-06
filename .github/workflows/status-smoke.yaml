@@ -57,4 +57,8 @@ jobs:
           name: smoke-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.ANTHROPIC_API_KEY }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}

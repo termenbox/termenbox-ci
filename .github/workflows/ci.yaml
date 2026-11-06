@@ -97,7 +97,11 @@ jobs:
           name: changes-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.STATUS_TOKEN }}
 
   client:
     name: Client (typecheck, build)
@@ -181,7 +185,10 @@ jobs:
           name: client-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # The optional wrappers (decision 0140): the icon and bridge generators, the injected bridge and the Electron
   # main process with its navigation/CSP tests. Platform builds still need their own hosts (R76 step 5); this
@@ -240,7 +247,10 @@ jobs:
           name: native-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   rust-lint:
     name: Rust (fmt, clippy)
@@ -283,7 +293,10 @@ jobs:
           name: rust-lint-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # The release server binary the browser jobs drive. Nothing else runs in this job, so e2e and browsers-real start as
   # soon as it is compiled instead of waiting for clippy and the debug test build.
@@ -333,7 +346,10 @@ jobs:
           name: rust-build-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   rust-test:
     name: Rust (tests)
@@ -397,7 +413,10 @@ jobs:
           name: rust-test-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # Real Chrome against the real server binary: login and claim over WebRTC, typing, reconnect with screen replay,
   # plus the resource gates (server RSS with 10 sessions, CPU while output streams). Only GitHub is a stand-in.
@@ -474,7 +493,10 @@ jobs:
           name: e2e-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # The browser binaries and their OS deps (GStreamer + codec stack for WebKit) are baked into the
   # CI image (docker/Dockerfile.ci, .github/workflows/ci-image.yaml); the matrix jobs start from it
@@ -568,7 +590,10 @@ jobs:
           name: browsers-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # R36: the same engines against the real server binary and real tmux (attach, switch, reconnect, keys, selection, mouse
   # reporting, resize, the 720/1024 breakpoints). WebSocket only; WebRTC and the resource gates stay in the Chromium job above.
@@ -679,7 +704,10 @@ jobs:
           name: browsers-real-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # The native host mode (decision 0075) ships one static musl binary per architecture: no glibc, no OpenSSL,
   # nothing to install. Build both on the native runners and fail if anything is linked dynamically.
@@ -752,7 +780,10 @@ jobs:
           name: static-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # The same end-to-end test as above against the static binary, so musl-specific problems (DNS, DTLS, PTY, the
   # directory announce) cannot reach a release unnoticed.
@@ -811,7 +842,10 @@ jobs:
           name: e2e-static-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # The bundled tmux (decision 0119), built from the pinned sources and put through its gate (static, runs with an
   # empty PATH and no terminfo, drives a session in control mode). The installer job installs this very binary.
@@ -888,7 +922,10 @@ jobs:
           name: tmux-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # The native installer (decision 0075) run for real: a machine with systemd, a release signed with a throwaway
   # key, then install, install again, a refused tampered release, and a revert that restores the machine.
@@ -954,7 +991,10 @@ jobs:
           name: installer-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # The container install and its updater (decision 0155) run for real: a machine with systemd and the runner's Docker
   # daemon, a local registry, and signed manifests that name the images by digest.
@@ -1006,7 +1046,10 @@ jobs:
           name: container-installer-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # One result for branch protection: require this check instead of the individual jobs, and the graph above can be
   # reshaped without touching the repository settings again. A skipped job is a failure unless `changes` said the pull
@@ -1070,7 +1113,11 @@ jobs:
           name: security-surface-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.STATUS_TOKEN }}
 
   # Guardrail open-security-findings-stay-private-until-fixed: no commit of a pull request, and no test it adds,
   # names a private finding id or an unpublished advisory id. Runs for every pull request, whatever it touches.
@@ -1104,7 +1151,10 @@ jobs:
           name: commit-ids-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # Pushes only: drops the older generations of every cache group (each rust-cache and setup-node save leaves the
   # previous entry behind), so the 10 GB budget holds the newest entry of each group instead of five of them.
@@ -1145,7 +1195,10 @@ jobs:
           name: cache-prune-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   ci:
     name: CI result
@@ -1188,7 +1241,9 @@ jobs:
           name: ci-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
           needs: ${{ toJSON(needs) }}
 
       - if: always()

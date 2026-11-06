@@ -47,4 +47,7 @@ jobs:
           name: go-getter-checks-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}

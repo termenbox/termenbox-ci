@@ -91,4 +91,8 @@ jobs:
           name: base-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.GITHUB_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}

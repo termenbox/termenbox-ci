@@ -127,7 +127,10 @@ jobs:
           name: plan-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # One native runner per architecture: no QEMU, so the Rust build runs at full speed. Build cache lives in GHCR
   # (the Actions cache has a 10 GB per-repository cap that two architectures' layers were filling).
@@ -212,7 +215,11 @@ jobs:
           name: build-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.GHCR_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # Joins the two single-architecture images into the multi-architecture tags users pull.
   manifest:
@@ -263,4 +270,7 @@ jobs:
           name: manifest-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.GHCR_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}

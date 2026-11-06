@@ -108,7 +108,13 @@ jobs:
           name: publish-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            ${{ secrets.CLOUDFLARE_API_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.STATUS_TOKEN }}
 
   gate:
     name: Check the editor's permission
@@ -150,7 +156,10 @@ jobs:
           name: gate-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.STATUS_TOKEN }}
 
   accept:
     name: Record an acceptance
@@ -204,4 +213,8 @@ jobs:
           name: accept-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.STATUS_TOKEN }}
