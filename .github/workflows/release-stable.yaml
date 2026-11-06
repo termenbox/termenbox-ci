@@ -8,7 +8,7 @@ name: Release (stable)
 
 on:
   repository_dispatch:
-    types: [source-pushed]
+    types: [source-tag]
   workflow_dispatch:
     inputs:
       version:

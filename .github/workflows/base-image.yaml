@@ -5,7 +5,7 @@ name: Build Base Image
 # app builds then start FROM it and skip all package installs.
 on:
   repository_dispatch:
-    types: [source-pushed]
+    types: [source-master]
   schedule:
     - cron: '17 3 * * 1'
   workflow_dispatch:

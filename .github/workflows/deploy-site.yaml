@@ -3,7 +3,7 @@ name: Deploy landing site
 
 on:
   repository_dispatch:
-    types: [source-pushed]
+    types: [source-master]
   workflow_dispatch:
     inputs:
       preview:

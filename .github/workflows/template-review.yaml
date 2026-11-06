@@ -9,7 +9,7 @@ name: Template Review
 # through env.
 on:
   repository_dispatch:
-    types: [source-pushed]
+    types: [source-comment]
   workflow_dispatch:
     inputs:
       pages:

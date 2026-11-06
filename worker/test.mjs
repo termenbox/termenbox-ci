@@ -1,6 +1,6 @@
 // node worker/test.mjs : the event mapping, offline.
 import assert from "node:assert/strict";
-import { plan } from "./index.js";
+import { plan, typesFor } from "./index.js";
 const repo = { full_name: "termenbox/termenbox-source" };
 const A = "a".repeat(40), B = "b".repeat(40), Z = "0".repeat(40);
 assert.deepEqual(plan("push", { repository: repo, ref: "refs/heads/develop", after: A, before: B }), { event: "push", sha: A, base: B, pr: "" });
@@ -38,3 +38,12 @@ assert.equal(plan("issues", { ...edited, issue: { number: 9, labels: [{ name: "t
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 9, labels: [{ name: "template-review" }] }, comment: { id: 14, body: "/approve" } }), null);
 assert.ok(!JSON.stringify(plan("issues", { ...edited, issue: { number: 9, labels: [{ name: "template-review" }], body: "SECRET" } })).includes("SECRET"));
 console.log("worker review issues: ok");
+
+const T = (event, p) => typesFor(plan(event, p), p);
+assert.deepEqual(T("push", { repository: repo, ref: "refs/heads/develop", after: A, before: B }), ["source-pushed"]);
+assert.deepEqual(T("push", { repository: repo, ref: "refs/heads/master", after: A, before: B }), ["source-pushed", "source-master"]);
+assert.deepEqual(T("push", { repository: repo, ref: "refs/tags/v1.2.3", after: A, before: Z }), ["source-tag"]);
+assert.deepEqual(T("pull_request", pr(repo)), ["source-pushed"]);
+assert.deepEqual(T("issues", edited), ["source-comment"]);
+assert.deepEqual(T("issue_comment", { repository: repo, action: "created", issue: review, comment: { id: 11, body: "/approve" } }), ["source-comment"]);
+console.log("worker types: ok");

@@ -9,7 +9,7 @@ run-name: Image ${{ github.event.client_payload.tag }}
 # for a push to master, and there is no `edge`. release_plan.py decides, so the tags cannot drift from the release.
 on:
   repository_dispatch:
-    types: [source-pushed]
+    types: [source-pushed, source-tag]
   workflow_call:
     inputs:
       sha: { description: 'commit to build', required: true, type: string }

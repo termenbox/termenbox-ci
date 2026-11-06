@@ -62,6 +62,15 @@ export function plan(event, p) {
   return null;
 }
 
+// The dispatch types to send for a planned event: a workflow listens only to the types it needs (scripts/port-workflow.py in the
+// source), so a tag-only or master-only workflow gets no run, and holds no runner, for a push it would skip.
+export function typesFor(cp, p) {
+  if (cp.event === "tag") return ["source-tag"];
+  if (cp.event === "push") return p.ref === "refs/heads/master" ? ["source-pushed", "source-master"] : ["source-pushed"];
+  if (cp.event === "pull_request") return ["source-pushed"];
+  return ["source-comment"];
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -77,16 +86,20 @@ export default {
     try { payload = JSON.parse(new TextDecoder().decode(body)); } catch { return new Response("bad json", { status: 400 }); }
     const client_payload = plan(event, payload);
     if (!client_payload) return new Response("ignored", { status: 202 });
-    const res = await fetch(`https://api.github.com/repos/${CI_REPO}/dispatches`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.DISPATCH_TOKEN}`,
-        accept: "application/vnd.github+json",
-        "user-agent": "termenbox-ci-hook",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ event_type: "source-pushed", client_payload }),
-    });
-    return new Response(res.ok ? "dispatched" : `dispatch failed: ${res.status}`, { status: res.ok ? 202 : 502 });
+    let failed = 0;
+    for (const event_type of typesFor(client_payload, payload)) {
+      const res = await fetch(`https://api.github.com/repos/${CI_REPO}/dispatches`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${env.DISPATCH_TOKEN}`,
+          accept: "application/vnd.github+json",
+          "user-agent": "termenbox-ci-hook",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ event_type, client_payload }),
+      });
+      if (!res.ok) failed = res.status;
+    }
+    return new Response(failed ? `dispatch failed: ${failed}` : "dispatched", { status: failed ? 502 : 202 });
   },
 };

@@ -7,7 +7,7 @@ name: Docs Media Review
 # later step is skipped unless it is write, maintain or admin. The comment and the issue body reach the scripts only through env.
 on:
   repository_dispatch:
-    types: [source-pushed]
+    types: [source-comment]
 
 permissions:
   contents: write
