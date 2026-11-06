@@ -89,6 +89,10 @@ jobs:
               *" latest "*) echo "::error::latest is pushed by a stable tag only, not by a manual run"; exit 1 ;;
             esac
             tags="$DISPATCH_TAG"
+          elif [ "$TB_EVENT" != pull_request ]; then
+            # Only a stable or beta tag, a manual run, a nightly call and a pull request build; anything else (the ci repo
+            # also receives pushes to the development branch) builds and pushes nothing.
+            echo "::notice::$TB_EVENT builds no image"; run=false
           fi
           {
             if [ "$TB_EVENT" = pull_request ]; then channel=""; fi

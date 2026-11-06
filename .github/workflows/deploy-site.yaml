@@ -92,6 +92,7 @@ jobs:
           elif [ "$(git rev-parse HEAD)" = "$(git ls-remote origin refs/heads/master | cut -f1)" ]; then
             BRANCH=master
           else
+            if [ "$TB_EVENT" = push ]; then echo "not the head of master: nothing to deploy"; exit 0; fi
             echo "production deploys only from master; pass a preview alias" >&2; exit 1
           fi
           wrangler pages deploy site-dist --project-name="$PROJECT" --branch="$BRANCH"
