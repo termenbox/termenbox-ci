@@ -1,5 +1,6 @@
 # Generated from the Termenbox source. Do not edit here.
 name: Template Review
+run-name: "Template Review · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', github.event.client_payload.sha) || '' }}"
 
 # The owner accepts a UI slice's templates on its probe page, with one tap, before the slice is wired.
 # Dispatch builds the e2e probe pages, publishes them to a Cloudflare Pages preview on their own branch alias (never production) and

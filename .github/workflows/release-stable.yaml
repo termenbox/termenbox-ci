@@ -1,5 +1,6 @@
 # Generated from the Termenbox source. Do not edit here.
 name: Release (stable)
+run-name: "Release (stable) · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', github.event.client_payload.sha) || '' }}"
 
 # A tag vX.Y.Z on master publishes the stable release: binaries, tmux, a manifest signed by the stable key
 # `r1` from the `stable` environment, and the GitHub "latest" release. It also moves channel-beta when this release is newer

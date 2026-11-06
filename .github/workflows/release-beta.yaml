@@ -1,5 +1,6 @@
 # Generated from the Termenbox source. Do not edit here.
 name: Release (beta)
+run-name: "Release (beta) · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', github.event.client_payload.sha) || '' }}"
 
 # A tag vX.Y.Z-rc.N or vX.Y.Z-beta.N on master publishes a beta prerelease, signed by the beta key `b1`
 # from the `beta` environment, and moves channel-beta to it when it is the newest. It is never GitHub's "latest"
