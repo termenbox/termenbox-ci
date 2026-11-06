@@ -8,6 +8,8 @@ const CI_REPO = "termenbox/termenbox-ci";
 const SRC_REPOS = ["termenbox/termenbox-source"];
 const isSource = (r) => !!r && SRC_REPOS.includes(r.full_name);
 const BRANCHES = ["master", "develop"];
+// Pull requests are also admitted into the Tenon branches (decision 0217); pushes stay on BRANCHES.
+const PR_BASES = [...BRANCHES, "feat/tenon-spike", "feat/tenon-dev"];
 const ZERO = /^0+$/;
 // Review issues the workflows follow: a docs-media video review and a template-review probe-page acceptance.
 const REVIEW_LABELS = ["docs-media", "template-review"];
@@ -41,7 +43,7 @@ export function plan(event, p) {
     const pr = p.pull_request;
     if (!pr || !["opened", "synchronize", "reopened", "ready_for_review"].includes(p.action)) return null;
     if (!isSource(pr.head.repo)) return null; // never a fork
-    if (!BRANCHES.includes(pr.base.ref)) return null;
+    if (!PR_BASES.includes(pr.base.ref)) return null;
     return { event: "pull_request", sha: pr.head.sha, base: pr.base.sha, pr: String(pr.number) };
   }
   if (event === "issue_comment") {

@@ -19,6 +19,11 @@ assert.deepEqual(plan("issue_comment", { repository: repo, action: "created", is
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 8, labels: [{ name: "bug" }] }, comment: { id: 12, body: "/approve" } }), null);
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 8 }, comment: { id: 12, body: "/approve" } }), null);
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: review, comment: { id: 13, body: "approve" } }), null);
+const prInto = (ref) => ({ ...pr(repo), pull_request: { ...pr(repo).pull_request, base: { sha: B, ref } } });
+assert.equal(plan("pull_request", prInto("feat/tenon-spike")).pr, "7");
+assert.equal(plan("pull_request", prInto("feat/tenon-dev")).pr, "7");
+assert.equal(plan("pull_request", prInto("feat/other")), null);
+assert.equal(plan("push", { repository: repo, ref: "refs/heads/feat/tenon-spike", after: A, before: B }), null);
 const oldName = { full_name: "termenbox/termenbox" };
 assert.equal(plan("push", { repository: oldName, ref: "refs/heads/develop", after: A, before: B }), null);
 assert.equal(plan("pull_request", pr(oldName)), null);
