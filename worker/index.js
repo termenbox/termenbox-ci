@@ -7,6 +7,9 @@ const CI_REPO = "termenbox/termenbox-ci";
 const SRC_REPO = "termenbox/termenbox";
 const BRANCHES = ["master", "develop"];
 const ZERO = /^0+$/;
+// Review issues the workflows follow: a docs-media video review and a template-review probe-page acceptance.
+const REVIEW_LABELS = ["docs-media", "template-review"];
+const isReview = (issue) => (issue.labels || []).some((l) => l && REVIEW_LABELS.includes(l.name));
 
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
@@ -48,9 +51,10 @@ export function plan(event, p) {
     return { event: "issue_comment", sha: "", base: "", pr: "", issue: String(p.issue.number), comment_id: String(p.comment.id) };
   }
   if (event === "issues") {
-    // Ticking a line of a docs-media review issue edits its body; only the number and the editor's login leave here.
+    // Ticking a line of a review issue edits its body; only the number and the editor's login leave here (never the old or new body:
+    // template-review rebuilds the previous state from its own acceptance comments).
     if (p.action !== "edited" || !p.issue || p.issue.pull_request || !p.changes || !p.changes.body) return null;
-    if (!(p.issue.labels || []).some((l) => l && l.name === "docs-media")) return null;
+    if (!isReview(p.issue)) return null;
     return { event: "issue_edited", sha: "", base: "", pr: "", issue: String(p.issue.number), actor: String((p.sender && p.sender.login) || "") };
   }
   return null;
