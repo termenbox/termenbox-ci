@@ -5,7 +5,7 @@
 
 const CI_REPO = "termenbox/termenbox-ci";
 // The source is renamed in two steps; both names are accepted until every reference follows the new one.
-const SRC_REPOS = ["termenbox/termenbox", "termenbox/termenbox-source"];
+const SRC_REPOS = ["termenbox/termenbox-source"];
 const isSource = (r) => !!r && SRC_REPOS.includes(r.full_name);
 const BRANCHES = ["master", "develop"];
 const ZERO = /^0+$/;

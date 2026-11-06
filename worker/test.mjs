@@ -1,7 +1,7 @@
 // node worker/test.mjs : the event mapping, offline.
 import assert from "node:assert/strict";
 import { plan } from "./index.js";
-const repo = { full_name: "termenbox/termenbox" };
+const repo = { full_name: "termenbox/termenbox-source" };
 const A = "a".repeat(40), B = "b".repeat(40), Z = "0".repeat(40);
 assert.deepEqual(plan("push", { repository: repo, ref: "refs/heads/develop", after: A, before: B }), { event: "push", sha: A, base: B, pr: "" });
 assert.equal(plan("push", { repository: repo, ref: "refs/heads/feature/x", after: A, before: B }), null);
@@ -19,9 +19,9 @@ assert.deepEqual(plan("issue_comment", { repository: repo, action: "created", is
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 8, labels: [{ name: "bug" }] }, comment: { id: 12, body: "/approve" } }), null);
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 8 }, comment: { id: 12, body: "/approve" } }), null);
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: review, comment: { id: 13, body: "approve" } }), null);
-const renamed = { full_name: "termenbox/termenbox-source" };
-assert.deepEqual(plan("push", { repository: renamed, ref: "refs/heads/develop", after: A, before: B }), { event: "push", sha: A, base: B, pr: "" });
-assert.deepEqual(plan("pull_request", pr(renamed)), { event: "pull_request", sha: A, base: B, pr: "7" });
+const oldName = { full_name: "termenbox/termenbox" };
+assert.equal(plan("push", { repository: oldName, ref: "refs/heads/develop", after: A, before: B }), null);
+assert.equal(plan("pull_request", pr(oldName)), null);
 assert.equal(plan("pull_request", { ...pr(repo), pull_request: { ...pr(repo).pull_request, head: { sha: A, repo: { full_name: "termenbox/termenbox-ci" } } } }), null);
 assert.equal(plan("push", { repository: { full_name: "termenbox/termenbox-security" }, ref: "refs/heads/develop", after: A }), null);
 console.log("worker plan: ok");
