@@ -80,7 +80,7 @@ jobs:
         if: inputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: termenbox/termenbox-ci
+          GH_REPO: termenbox/termenbox
           TAG: ${{ inputs.tag }}
         run: |
           mkdir -p "$RUNNER_TEMP/staged" packages/client/dist

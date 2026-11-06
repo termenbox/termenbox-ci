@@ -105,7 +105,7 @@ jobs:
         if: steps.g.outputs.run == 'true' && steps.g.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: termenbox/termenbox-ci
+          GH_REPO: termenbox/termenbox
           VERSION: ${{ steps.g.outputs.version }}
         run: sh .github/scripts/check_not_frozen.sh stable "$VERSION"
 

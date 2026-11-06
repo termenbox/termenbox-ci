@@ -8,10 +8,10 @@ name: Release (nightly)
 # nightly key `n1` from the `nightly` environment. Keeps 14 days of nightlies, never the one channel-nightly
 # points at. Run by hand it is a dry run unless `publish` is ticked.
 #
-# It publishes to the nightly/ path of the R2 bucket and to the Releases of the ci repo (release-build.yaml, decision
+# It publishes to the nightly/ path of the R2 bucket and to the Releases of the product repo (release-build.yaml, decision
 # 0212), and nothing else: no stable or beta path, key or alias. It does not call the security review gate.
-# The Releases it reads and prunes are those of the ci repo, with the workflow token (CI_TOKEN and CI_REPO below); the
-# other GH_TOKEN reads the source.
+# The Releases it reads are those of the public product repo, with the workflow token (CI_TOKEN and CI_REPO below); the
+# prune job deletes in them with MIRROR_TOKEN of the nightly environment; the other GH_TOKEN reads the source.
 
 on:
   schedule:
@@ -73,7 +73,7 @@ jobs:
           GH_REPO: termenbox/termenbox-source
           STATUS_TOKEN: ${{ secrets.STATUS_TOKEN }}
           CI_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CI_REPO: termenbox/termenbox-ci
+          CI_REPO: termenbox/termenbox
           EVENT: ${{ (github.event.client_payload.event || github.event_name) }}
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           DISPATCH_PUBLISH: ${{ inputs.publish }}
@@ -104,7 +104,7 @@ jobs:
             if GH_TOKEN="$CI_TOKEN" GH_REPO="$CI_REPO" gh release view "$tag" >/dev/null 2>&1; then
               echo "::notice::$tag already exists; one nightly a day"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
             fi
-            # the ci repo has no tag at the source commit: the last nightly's notes name the commit it was built from
+            # the product repo has no tag at the source commit: the last nightly's notes name the commit it was built from
             last="$(GH_TOKEN="$CI_TOKEN" GH_REPO="$CI_REPO" gh release list --limit 100 --json tagName -q '.[].tagName' | grep -E '^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}-nightly$' | sort | tail -1)" || last=""
             if [ -n "$last" ] && GH_TOKEN="$CI_TOKEN" GH_REPO="$CI_REPO" gh release view "$last" --json body -q .body | grep -q "$sha"; then
               echo "::notice::$last was built from this commit; nothing changed"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
@@ -191,8 +191,9 @@ jobs:
     needs: [select, release]
     if: needs.select.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    environment: nightly
     permissions:
-      contents: write
+      contents: read
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
@@ -205,8 +206,8 @@ jobs:
           remote: true
       - name: Delete nightlies older than 14 days (never the alias target)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: termenbox/termenbox-ci
+          GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+          GH_REPO: termenbox/termenbox
         run: sh .github/scripts/prune_nightlies.sh 14
 
       - if: always()
@@ -218,7 +219,7 @@ jobs:
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
           secrets: |-
-            ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.MIRROR_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}

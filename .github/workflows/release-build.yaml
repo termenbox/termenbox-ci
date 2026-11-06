@@ -8,7 +8,8 @@ name: Release build
 # pipeline can be tested.
 #
 # Where a release goes: the project's R2 bucket under <channel>/<version>/ (what installers read, through
-# dl.termenbox.dev), then the Releases of the public ci repo termenbox/termenbox-ci as a mirror and an immutable record.
+# dl.termenbox.dev), then the Releases of the public product repo termenbox/termenbox as a mirror and an immutable record,
+# written with MIRROR_TOKEN (contents write on that repo only, held in the channel's environment).
 # The stable and beta callers run the security review gate in a job this one needs, so nothing below runs without it;
 # nightly is exempt. Hosts are not trusted: the installer checks the signed manifest, not the host.
 #
@@ -28,7 +29,7 @@ on:
       channel: { description: 'stable, beta or nightly; also the GitHub Environment that holds the signing key', required: true, type: string }
       kid: { description: 'id of the channel signing key in release-keys.txt (r1, b1, n1)', required: true, type: string }
       version: { description: 'manifest version, full SemVer', required: true, type: string }
-      tag: { description: 'release tag of the mirror release in the ci repo', required: true, type: string }
+      tag: { description: 'release tag of the mirror release in the product repo', required: true, type: string }
       sha: { description: 'commit to build', required: true, type: string }
       publish: { description: 'upload to R2, create the mirror release and move the aliases and pointers', required: true, type: boolean }
       prerelease: { required: true, type: boolean }
@@ -382,14 +383,14 @@ jobs:
           ALIASES: ${{ inputs.aliases }}
         run: sh .github/scripts/publish_r2.sh dist "$CHANNEL" "$VERSION" "$ALIASES"
 
-      # The mirror: the same files in a Release of the public ci repo (the workflow token of this run, GH_REPO below),
+      # The mirror: the same files in a Release of the public product repo (MIRROR_TOKEN, GH_REPO below),
       # which the installer falls back to only for a manifest R2 cannot serve. The source commit is not in that repo,
       # so the release has no --target and the notes name the commit.
       - name: Publish
         if: inputs.publish
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: termenbox/termenbox-ci
+          GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+          GH_REPO: termenbox/termenbox
           SHA: ${{ inputs.sha }}
           NOTES: ${{ inputs.notes }}
           PRERELEASE: ${{ inputs.prerelease }}
@@ -421,8 +422,8 @@ jobs:
       - name: Move the aliases
         if: inputs.publish && inputs.aliases != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: termenbox/termenbox-ci
+          GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+          GH_REPO: termenbox/termenbox
           ALIASES: ${{ inputs.aliases }}
         run: |
           for alias in $ALIASES; do
@@ -438,8 +439,8 @@ jobs:
         with:
           channel: ${{ inputs.channel }}
           stage-tag: ${{ inputs.tag }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          release-repo: termenbox/termenbox-ci
+          github-token: ${{ secrets.MIRROR_TOKEN }}
+          release-repo: termenbox/termenbox
           pages-project-name: ${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}
           d1-database-id: ${{ vars.TERMENBOX_D1_DATABASE_ID }}
           client-origin: ${{ vars.TERMENBOX_CLIENT_ORIGIN }}
@@ -462,9 +463,9 @@ jobs:
           secrets: |-
             ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             ${{ secrets.CLOUDFLARE_API_TOKEN }}
-            ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.MIRROR_TOKEN }}
             ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
             ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
             ${{ secrets.RELEASE_SIGNING_KEY }}

@@ -7,7 +7,7 @@ name: Release freeze
 # workflows refuse an older one while it holds (check_not_frozen.sh). The steps to run it are in SECURITY.md.
 # The freeze goes to R2 first, because installers and updaters read the download host before the mirror: it is written to
 # the channel's pointer (and, for stable, the beta pointer a beta server also follows) with the same forward-only rule and
-# the same key pair as a release (publish_r2.sh --freeze), and then to the Releases of the ci repo. A run that fails after
+# the same key pair as a release (publish_r2.sh --freeze), and then to the Releases of the product repo. A run that fails after
 # R2 can be run again with the same version while the mirror still holds the old manifest: the pointer already holds the
 # freeze and only the mirror is finished.
 # publish=false does everything but publish, with a throwaway key.
@@ -67,8 +67,8 @@ jobs:
       VERSION: ${{ inputs.version }}
       NOTES: ${{ inputs.notes }}
       PUBLISH: ${{ inputs.publish }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: termenbox/termenbox-ci
+      GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+      GH_REPO: termenbox/termenbox
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
@@ -160,9 +160,9 @@ jobs:
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
           secrets: |-
-            ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.MIRROR_TOKEN }}
             ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
             ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
             ${{ secrets.RELEASE_SIGNING_KEY }}
