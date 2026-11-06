@@ -21,7 +21,7 @@ To report a security problem, write to **security@termenbox.dev**. Please do not
 
 ## Attribution
 
-Copyright (c) 2026 the Termenbox authors. The workflow files, shared actions and the Worker in this repository are
+Copyright (c) 2026 Sergei Strebulaev, doing business as Termenbox. The workflow files, shared actions and the Worker in this repository are
 released under the MIT licence (see [LICENSE](LICENSE)).
 
 The workflows call third-party actions, which keep their own licences (see [NOTICES](NOTICES)). Termenbox itself is
