@@ -19,6 +19,11 @@ assert.deepEqual(plan("issue_comment", { repository: repo, action: "created", is
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 8, labels: [{ name: "bug" }] }, comment: { id: 12, body: "/approve" } }), null);
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 8 }, comment: { id: 12, body: "/approve" } }), null);
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: review, comment: { id: 13, body: "approve" } }), null);
+const renamed = { full_name: "termenbox/termenbox-source" };
+assert.deepEqual(plan("push", { repository: renamed, ref: "refs/heads/develop", after: A, before: B }), { event: "push", sha: A, base: B, pr: "" });
+assert.deepEqual(plan("pull_request", pr(renamed)), { event: "pull_request", sha: A, base: B, pr: "7" });
+assert.equal(plan("pull_request", { ...pr(repo), pull_request: { ...pr(repo).pull_request, head: { sha: A, repo: { full_name: "termenbox/termenbox-ci" } } } }), null);
+assert.equal(plan("push", { repository: { full_name: "termenbox/termenbox-security" }, ref: "refs/heads/develop", after: A }), null);
 console.log("worker plan: ok");
 
 const edited = { repository: repo, action: "edited", issue: { number: 7, labels: [{ name: "docs-media" }] }, changes: { body: { from: "x" } }, sender: { login: "owner" } };

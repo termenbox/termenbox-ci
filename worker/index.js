@@ -4,7 +4,9 @@
 // never a branch name, title, message or author.
 
 const CI_REPO = "termenbox/termenbox-ci";
-const SRC_REPO = "termenbox/termenbox";
+// The source is renamed in two steps; both names are accepted until every reference follows the new one.
+const SRC_REPOS = ["termenbox/termenbox", "termenbox/termenbox-source"];
+const isSource = (r) => !!r && SRC_REPOS.includes(r.full_name);
 const BRANCHES = ["master", "develop"];
 const ZERO = /^0+$/;
 // Review issues the workflows follow: a docs-media video review and a template-review probe-page acceptance.
@@ -26,7 +28,7 @@ async function validSignature(secret, body, header) {
 
 // Maps a webhook to the dispatch payload, or null when the event is not one we run.
 export function plan(event, p) {
-  if (!p || !p.repository || p.repository.full_name !== SRC_REPO) return null;
+  if (!p || !isSource(p.repository)) return null;
   if (event === "push") {
     if (!p.after || ZERO.test(p.after)) return null;
     const m = /^refs\/heads\/(.+)$/.exec(p.ref || "");
@@ -38,7 +40,7 @@ export function plan(event, p) {
   if (event === "pull_request") {
     const pr = p.pull_request;
     if (!pr || !["opened", "synchronize", "reopened", "ready_for_review"].includes(p.action)) return null;
-    if (!pr.head.repo || pr.head.repo.full_name !== SRC_REPO) return null; // never a fork
+    if (!isSource(pr.head.repo)) return null; // never a fork
     if (!BRANCHES.includes(pr.base.ref)) return null;
     return { event: "pull_request", sha: pr.head.sha, base: pr.base.sha, pr: String(pr.number) };
   }
