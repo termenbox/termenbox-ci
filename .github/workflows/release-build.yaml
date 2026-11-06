@@ -7,6 +7,11 @@ name: Release build
 # publish=false does everything but publish, with a throwaway key when the real one is not configured, so the
 # pipeline can be tested.
 #
+# Where a release goes (decision 0212): the project's R2 bucket under <channel>/<version>/ (what installers read, through
+# dl.termenbox.dev), then the Releases of the public ci repo termenbox/termenbox-ci as a mirror and an immutable record.
+# The stable and beta callers run the security review gate in a job this one needs, so nothing below runs without it;
+# nightly is exempt (decision 0133). Hosts are not trusted: the installer checks the signed manifest, not the host.
+#
 # ci.yaml is canonical for how things are built: it runs far more often than a release, so this workflow follows it
 # instead of defining a setup of its own.
 #   - The two cargo variables below equal ci.yaml's. Swatinem/rust-cache puts CARGO*/RUST*/CC* variables into its key,
@@ -23,9 +28,9 @@ on:
       channel: { description: 'stable, beta or nightly; also the GitHub Environment that holds the signing key', required: true, type: string }
       kid: { description: 'id of the channel signing key in release-keys.txt (r1, b1, n1)', required: true, type: string }
       version: { description: 'manifest version, full SemVer', required: true, type: string }
-      tag: { description: 'release tag the assets are published under', required: true, type: string }
+      tag: { description: 'release tag of the mirror release in the ci repo', required: true, type: string }
       sha: { description: 'commit to build', required: true, type: string }
-      publish: { description: 'create the release and move the aliases', required: true, type: boolean }
+      publish: { description: 'upload to R2, create the mirror release and move the aliases and pointers', required: true, type: boolean }
       prerelease: { required: true, type: boolean }
       latest: { description: 'GitHub marks it as the latest release (only stable)', required: true, type: boolean }
       aliases: { description: 'space separated rolling releases that may point at it', required: false, type: string, default: '' }
@@ -166,13 +171,13 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: build-${{ strategy.job-index }}
 
-  # Stable and beta tags start docker-build.yaml beside this workflow, so the image may still be building: wait for the
-  # multi-architecture tag and record the digests the signed manifest will name (decision 0155). It holds no secret.
-  # Nightly pushes its image after the release, so a nightly manifest has no image yet. A dry run pushes none.
+  # Every channel starts docker-build.yaml beside this workflow (a tag starts it for stable and beta, release-nightly.yaml
+  # calls it), so the image may still be building: wait for the multi-architecture tag and record the digests the signed
+  # manifest will name (decision 0155). It holds no secret. A dry run pushes none.
   image:
     name: Image digests
     needs: build
-    if: inputs.publish && inputs.channel != 'nightly'
+    if: inputs.publish
     environment: ${{ inputs.channel }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -211,7 +216,7 @@ jobs:
   manifest:
     name: Manifest, signature and publish
     needs: [build, image]
-    # The image job is skipped for a dry run and for nightly; anything else that skipped or failed must stop here.
+    # The image job is skipped for a dry run; anything else that skipped or failed must stop here.
     if: ${{ !cancelled() && needs.build.result == 'success' && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -298,40 +303,64 @@ jobs:
           if TERMENBOX_RELEASE_KEYS="$(cat "$TERMENBOX_RELEASE_KEYS_FILE")" dist/termenbox-server-x86_64-linux \
             --verify-release "$RUNNER_TEMP/changed.json" --release-sig dist/manifest.json.sig; then echo "a changed manifest was accepted"; exit 1; fi
 
+      # The licence texts ship next to the binaries, and SHA256SUMS lets a second host be compared byte for byte.
+      - name: Licence, notices and SHA256SUMS
+        run: |
+          cp LICENSE NOTICES dist/
+          (cd dist && sha256sum termenbox-server-*-linux tmux-*-linux tmux-COPYING tmux-libevent-LICENSE tmux-ncurses-COPYING LICENSE NOTICES manifest.json manifest.json.sig > SHA256SUMS)
+          cat dist/SHA256SUMS
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-manifest
           path: |
             dist/manifest.json
             dist/manifest.json.sig
+            dist/SHA256SUMS
           retention-days: 7
 
+      # The fast path: what the installer and the helper fetch. Versioned objects are immutable; the channel pointer
+      # only moves forward (publish_r2.sh). The key is the secret of this channel's environment, scoped to the bucket.
+      - name: Publish to R2
+        if: inputs.publish
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ vars.R2_RELEASE_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.R2_RELEASE_BUCKET }}
+          ALIASES: ${{ inputs.aliases }}
+        run: sh .github/scripts/publish_r2.sh dist "$CHANNEL" "$VERSION" "$ALIASES"
+
+      # The mirror: the same files in a Release of the public ci repo (the workflow token of this run, GH_REPO below),
+      # which the installer falls back to only for a manifest R2 cannot serve. The source commit is not in that repo,
+      # so the release has no --target and the notes name the commit.
       - name: Publish
         if: inputs.publish
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          GH_REPO: termenbox/termenbox
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: termenbox/termenbox-ci
           SHA: ${{ inputs.sha }}
           NOTES: ${{ inputs.notes }}
           PRERELEASE: ${{ inputs.prerelease }}
           LATEST: ${{ inputs.latest }}
         run: |
-          args=(--target "$SHA" --generate-notes)
+          args=()
           if [ "$PRERELEASE" = true ]; then args+=(--prerelease); fi
           if [ "$LATEST" = true ]; then args+=(--latest); else args+=(--latest=false); fi
-          if [ -n "$NOTES" ]; then args+=(--notes "$NOTES"); fi
-          gh release create "$TAG" --title "$TAG" "${args[@]}" \
+          body="Built from source commit ${SHA}. Mirror of https://dl.termenbox.dev/${CHANNEL}/${VERSION}/: SHA256SUMS lists every file, and the signed manifest.json is what installers trust, not this host."
+          if [ -n "$NOTES" ]; then body="${NOTES}"$'\n\n'"${body}"; fi
+          gh release create "$TAG" --title "$TAG" --notes "$body" "${args[@]}" \
             dist/termenbox-server-x86_64-linux dist/termenbox-server-aarch64-linux \
             dist/tmux-x86_64-linux dist/tmux-aarch64-linux dist/tmux-COPYING dist/tmux-libevent-LICENSE dist/tmux-ncurses-COPYING \
-            dist/manifest.json dist/manifest.json.sig
+            dist/LICENSE dist/NOTICES dist/SHA256SUMS dist/manifest.json dist/manifest.json.sig
 
-      # The rolling releases only ever move forward (a stable release moves channel-beta when it is newer than the
+      # The rolling releases of the mirror only ever move forward (a stable release moves channel-beta when it is newer than the
       # last beta); they hold a copy of the manifest and nothing else, the assets stay under the tag above.
       - name: Move the aliases
         if: inputs.publish && inputs.aliases != ''
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          GH_REPO: termenbox/termenbox
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: termenbox/termenbox-ci
           ALIASES: ${{ inputs.aliases }}
         run: |
           for alias in $ALIASES; do
@@ -348,7 +377,8 @@ jobs:
         with:
           channel: ${{ inputs.channel }}
           stage-tag: ${{ inputs.tag }}
-          github-token: ${{ secrets.RELEASE_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          release-repo: termenbox/termenbox-ci
           pages-project-name: ${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}
           d1-database-id: ${{ vars.TERMENBOX_D1_DATABASE_ID }}
           client-origin: ${{ vars.TERMENBOX_CLIENT_ORIGIN }}

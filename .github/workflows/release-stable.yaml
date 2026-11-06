@@ -103,8 +103,8 @@ jobs:
       - name: Freeze gate
         if: steps.g.outputs.run == 'true' && steps.g.outputs.publish == 'true'
         env:
-          GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
-          GH_REPO: termenbox/termenbox
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: termenbox/termenbox-ci
           VERSION: ${{ steps.g.outputs.version }}
         run: sh .github/scripts/check_not_frozen.sh stable "$VERSION"
 

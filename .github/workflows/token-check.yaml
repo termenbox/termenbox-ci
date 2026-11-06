@@ -3,12 +3,6 @@ name: token-check
 # Positive checks prove a token can do its job; negative checks prove it cannot do more.
 on:
   workflow_dispatch:
-    inputs:
-      channel:
-        description: 'Also check the RELEASE_TOKEN of this environment (beta and stable wait for your approval)'
-        type: choice
-        options: [none, nightly, beta, stable]
-        default: none
 permissions:
   contents: read
 jobs:
@@ -49,28 +43,4 @@ jobs:
           v=$(curl -s -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/$ep")
           printf '%s' "$v" | grep -q '"status":"active"' && echo "pass  CLOUDFLARE_WORKERS_TOKEN is active" || { echo "FAIL  CLOUDFLARE_WORKERS_TOKEN not active"; fail=1; }
           [ "${#LOG_KEY}" -ge 32 ] && echo "pass  LOG_KEY has 32+ characters" || { echo "FAIL  LOG_KEY is short or missing"; fail=1; }
-          exit $fail
-
-  release-token:
-    if: inputs.channel != 'none'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    environment: ${{ inputs.channel }}
-    env:
-      SRC: termenbox/termenbox
-      T: ${{ secrets.RELEASE_TOKEN }}
-    steps:
-      - name: Check the release token of this channel
-        run: |
-          fail=0
-          expect() { if printf '%s' "$2" | grep -Eq "^($3)$"; then echo "pass  $1"; else echo "FAIL  $1 (got $2)"; fail=1; fi; }
-          api() { curl -s -o /dev/null -w '%{http_code}' -X "$1" -H "Authorization: Bearer $T" -H 'Accept: application/vnd.github+json' "https://api.github.com/$2"; }
-          expect "RELEASE_TOKEN lists releases" "$(api GET "repos/$SRC/releases?per_page=1")" 200
-          code=$(curl -s -o rel.json -w '%{http_code}' -X POST -H "Authorization: Bearer $T" -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/json' -d "{\"tag_name\":\"token-check-$GITHUB_RUN_ID\",\"draft\":true,\"name\":\"token check\"}" "https://api.github.com/repos/$SRC/releases")
-          expect "RELEASE_TOKEN creates a draft release" "$code" 201
-          id=$(sed -n 's/^  "id": *\([0-9]*\),.*/\1/p' rel.json | head -n1); rm -f rel.json
-          [ -z "$id" ] || expect "RELEASE_TOKEN deletes it again" "$(api DELETE "repos/$SRC/releases/$id")" 204
-          scopes=$(curl -s -D - -o /dev/null -H "Authorization: Bearer $T" https://api.github.com/user | tr -d '\r' | sed -n 's/^[Xx]-[Oo][Aa]uth-[Ss]copes: *//p')
-          if [ -z "$scopes" ]; then echo "info  no scope header (fine-grained token): it cannot push packages"; fail=1; else
-            case ",$(printf '%s' "$scopes" | tr -d ' ')," in *,write:packages,*) echo "pass  RELEASE_TOKEN has write:packages";; *) echo "FAIL  RELEASE_TOKEN lacks write:packages (scopes: $scopes)"; fail=1;; esac; fi
           exit $fail

@@ -343,6 +343,7 @@ jobs:
         run: |
           python3 .github/scripts/test_make_manifest.py
           cd .github/scripts && python3 test_image_digests.py
+          python3 test_r2_retention.py
 
       - name: Test the release tag rules, the alias update and the nightly pruning
         run: |
@@ -354,6 +355,7 @@ jobs:
           sh .github/scripts/test-check-deploy-ref.sh
           sh .github/scripts/test-prune-nightlies.sh
           sh .github/scripts/test-update-alias.sh
+          sh .github/scripts/test-publish-r2.sh
           sh .github/scripts/test-ci-scope.sh
 
       - if: always()

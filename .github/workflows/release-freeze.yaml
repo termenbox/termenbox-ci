@@ -57,8 +57,8 @@ jobs:
       VERSION: ${{ inputs.version }}
       NOTES: ${{ inputs.notes }}
       PUBLISH: ${{ inputs.publish }}
-      GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-      GH_REPO: termenbox/termenbox
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: termenbox/termenbox-ci
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -118,7 +118,7 @@ jobs:
         if: inputs.publish
         run: |
           if [ "$CHANNEL" = stable ]; then
-            gh release create "v$VERSION" --title "v$VERSION (freeze)" --target "$(git rev-parse HEAD)" --latest \
+            gh release create "v$VERSION" --title "v$VERSION (freeze)" --latest \
               --notes "Signed freeze of the stable channel: updaters and the installer stop until a newer release. ${NOTES}" \
               dist/manifest.json dist/manifest.json.sig
             sh .github/scripts/update_alias.sh channel-beta dist/manifest.json dist/manifest.json.sig
