@@ -1,8 +1,8 @@
 # Generated from the Termenbox source. Do not edit here.
 name: Build & Push Docker Image
+run-name: "Build & Push Docker Image · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', substring(github.event.client_payload.sha, 0, 8)) || '' }}"
 
 # release-build.yaml finds the run of a stable or beta tag by this title, to stop waiting for an image whose build failed.
-run-name: Image ${{ github.event.client_payload.tag }}
 
 # The image tags follow the channels: a stable tag pushes latest, X.Y and X.Y.Z; a beta tag pushes beta
 # and the exact version; a nightly pushes nightly and the exact version. `latest` moves only for a stable tag, never
