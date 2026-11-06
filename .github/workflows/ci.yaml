@@ -1,6 +1,5 @@
 # Generated from the Termenbox source. Do not edit here.
 name: CI
-run-name: "CI · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', substring(github.event.client_payload.sha, 0, 8)) || '' }}"
 
 on:
   repository_dispatch:

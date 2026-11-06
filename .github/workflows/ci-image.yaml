@@ -1,6 +1,5 @@
 # Generated from the Termenbox source. Do not edit here.
 name: Build CI Image
-run-name: "Build CI Image · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', substring(github.event.client_payload.sha, 0, 8)) || '' }}"
 
 # CI image for the browser matrix jobs. The Playwright OS deps and browser binaries change rarely;
 # rebuilding weekly picks up OS security fixes and a new Playwright build, and the matrix jobs then

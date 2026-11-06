@@ -1,6 +1,5 @@
 # Generated from the Termenbox source. Do not edit here.
 name: Docs Media Review
-run-name: "Docs Media Review · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', substring(github.event.client_payload.sha, 0, 8)) || '' }}"
 
 # A developer with write access picks a rendered video for the docs by ticking its line in the review issue and commenting `/approve` once (every ticked line goes in one branch), or sends it back with
 # `/regen <case> [pace=slow|normal] [profile=phone|desktop] [caption=off] <note>`. Issue and comment events run THIS file from the default
