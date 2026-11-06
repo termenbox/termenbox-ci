@@ -55,6 +55,8 @@ jobs:
     needs: [gate]
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -82,7 +84,11 @@ jobs:
             ${{ env.IMAGE }}:${{ github.run_id }}
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: base-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}

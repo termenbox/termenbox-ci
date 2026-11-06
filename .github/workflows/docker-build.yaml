@@ -51,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
+      fail: ${{ steps.finish.outputs.summary }}
       run: ${{ steps.p.outputs.run }}
       tags: ${{ steps.p.outputs.tags }}
       version: ${{ steps.p.outputs.version }}
@@ -119,10 +120,14 @@ jobs:
           node "$gate/check-security-review.mjs" "$SHA"
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: plan-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}
 
   # One native runner per architecture: no QEMU, so the Rust build runs at full speed. Build cache lives in GHCR
   # (the Actions cache has a 10 GB per-repository cap that two architectures' layers were filling).
@@ -140,6 +145,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -198,10 +205,14 @@ jobs:
           retention-days: 1
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: build-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}
 
   # Joins the two single-architecture images into the multi-architecture tags users pull.
   manifest:
@@ -214,6 +225,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -243,7 +256,11 @@ jobs:
         run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: manifest-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}

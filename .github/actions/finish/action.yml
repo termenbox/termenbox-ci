@@ -1,11 +1,63 @@
 name: Finish a silent job
-description: Encrypts the job's quiet log and uploads it, so a failure is readable by the owner only.
+description: Encrypts the job's quiet log and uploads it, so a failure is readable by the owner only. On a failure it also names the failure and, when log-token is set, posts the scrubbed log tail to the private source repo.
 inputs:
   key: { description: Log passphrase, required: true }
   name: { description: Artifact name stem, required: true }
+  status: { description: "The calling job's status (job.status). Only `failure` starts the failure report.", default: '' }
+  log-token: { description: "Fine-grained token with Issues write on the source repo only (secret LOG_TOKEN). Empty: nothing is posted.", default: '' }
+  secrets: { description: "Secret values of the calling job (toJSON(secrets), or one value per line for a release or deploy job): every one is scrubbed from what is posted.", default: '' }
+  needs: { description: "toJSON(needs), for the aggregating `ci` job: its summary then lists the failed jobs and nothing is posted.", default: '' }
+outputs:
+  summary:
+    description: One line (140 characters at most) naming the failed job, its step and first failing tests. Empty unless the job failed.
+    value: ${{ steps.fail.outputs.summary }}
 runs:
   using: composite
   steps:
+    - id: fail
+      if: ${{ inputs.status == 'failure' }}
+      continue-on-error: true
+      shell: bash
+      env:
+        JOB: ${{ github.job }}
+        NEEDS: ${{ inputs.needs }}
+        SCRUB_SECRETS: ${{ inputs.secrets }}
+        LOG_KEY: ${{ inputs.key }}
+      run: |
+        f="$RUNNER_TEMP/quiet.log"; [ -f "$f" ] || : > "$f"
+        py="$GITHUB_ACTION_PATH/../../../scripts/ci_failure.py"
+        if [ -n "$NEEDS" ]; then out="$(printf '%s' "$NEEDS" | python3 "$py" describe-needs 2>/dev/null)" || out=""
+        else out="$(python3 "$py" summary --job "$JOB" --log "$f" 2>/dev/null)" || out="$JOB failed"
+        fi
+        out="$(printf '%s' "$out" | head -n1)"; [ -n "$out" ] || out="ci failed"
+        echo "summary=$out" >> "$GITHUB_OUTPUT"
+    - id: post
+      if: ${{ inputs.status == 'failure' && inputs.log-token != '' && inputs.needs == '' }}
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.log-token }}
+        GH_REPO: termenbox/termenbox
+        SCRUB_SECRETS: ${{ inputs.secrets }}
+        LOG_KEY: ${{ inputs.key }}
+        JOB: ${{ github.job }}
+        SHA: ${{ github.event.client_payload.sha || github.sha }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        # Posting is a courtesy: whatever goes wrong here, say nothing and leave the job's result alone.
+        f="$RUNNER_TEMP/quiet.log"; body="$RUNNER_TEMP/failure-comment.md"; rm -f "$body"
+        py="$GITHUB_ACTION_PATH/../../../scripts/ci_failure.py"
+        [ -f "$f" ] || exit 0
+        python3 "$py" comment --sha "$SHA" --job "$JOB" --run-url "$RUN_URL" --log "$f" --out "$body" 2>/dev/null || { rm -f "$body"; exit 0; }
+        [ -s "$body" ] || exit 0
+        n="$(gh issue list --label ci-failure --state open --search '"CI failures" in:title' --json number,title --jq '[.[] | select(.title == "CI failures")][0].number // empty' 2>/dev/null)" || n=""
+        if [ -z "$n" ]; then
+          gh label create ci-failure --color B60205 --description "A job of the ci repo failed" >/dev/null 2>&1 || true
+          url="$(gh issue create --title "CI failures" --label ci-failure --body "Rolling log of failed ci-repo jobs: one comment per failure, scrubbed. Written by termenbox-ci .github/actions/finish." 2>/dev/null)" && n="${url##*/}"
+        fi
+        [ -n "$n" ] && gh issue comment "$n" --body-file "$body" >/dev/null 2>&1
+        rm -f "$body"
+        exit 0
     - shell: bash
       env:
         LOG_KEY: ${{ inputs.key }}

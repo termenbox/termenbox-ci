@@ -56,6 +56,8 @@ jobs:
     needs: [gate]
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -81,10 +83,15 @@ jobs:
             ${{ env.IMAGE }}:${{ github.run_id }}
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: ci-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}
+          needs: ${{ toJSON(needs) }}
 
       - if: always()
         shell: bash
@@ -92,7 +99,7 @@ jobs:
           GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
           SHA: ${{ github.event.client_payload.sha }}
           STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
-          DESC: ci result
+          DESC: ${{ steps.finish.outputs.summary || 'ci result' }}
         run: |
           [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
           gh api -X POST "repos/termenbox/termenbox/statuses/$SHA" -f state="$STATE" -f context=ci \

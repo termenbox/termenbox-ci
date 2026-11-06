@@ -50,6 +50,8 @@ jobs:
     environment: site
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -178,7 +180,11 @@ jobs:
           else gh issue create --title "$title" --label docs-media --body-file "$RUNNER_TEMP/body.md"; fi
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: render-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}

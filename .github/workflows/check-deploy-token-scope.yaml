@@ -30,6 +30,8 @@ jobs:
       fail-fast: false
       matrix:
         environment: [stable, beta, nightly, cloud, site]
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -45,7 +47,11 @@ jobs:
         run: node scripts/check-deploy-token-scope.mjs "$ENVIRONMENT"
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: scope-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}

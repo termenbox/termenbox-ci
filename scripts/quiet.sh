@@ -5,5 +5,10 @@
 log="${RUNNER_TEMP:-/tmp}/quiet.log"
 bash --noprofile --norc -e "$1" >>"$log" 2>&1
 rc=$?
+if [ "$rc" -ne 0 ]; then
+  # for the failure report (.github/actions/finish): the step id and its first command line, in the log only
+  cmd=$(grep -v -e '^[[:space:]]*$' -e '^[[:space:]]*#' "$1" 2>/dev/null | head -n1 | cut -c1-80)
+  echo "::termenbox-step-failed:: id=${GITHUB_ACTION:-} exit=$rc cmd=$cmd" >>"$log"
+fi
 echo "step finished: exit $rc"
 exit $rc

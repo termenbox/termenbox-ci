@@ -64,6 +64,8 @@ jobs:
     concurrency:
       group: deploy-pages-${{ inputs.channel }}
       cancel-in-progress: false
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -104,7 +106,21 @@ jobs:
           directory-salt: ${{ secrets.TERMENBOX_DIRECTORY_SALT }}
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: deploy-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            ${{ secrets.CLOUDFLARE_API_TOKEN }}
+            ${{ secrets.GITHUB_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.TERMENBOX_CERT_SIGNING_KEY }}
+            ${{ secrets.TERMENBOX_DIRECTORY_SALT }}
+            ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+            ${{ secrets.TERMENBOX_GITHUB_CLIENT_SECRET }}

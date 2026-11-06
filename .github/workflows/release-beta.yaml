@@ -31,6 +31,7 @@ jobs:
     name: Gate
     runs-on: ubuntu-latest
     outputs:
+      fail: ${{ steps.finish.outputs.summary }}
       run: ${{ steps.g.outputs.run }}
       version: ${{ steps.g.outputs.version }}
       tag: ${{ steps.g.outputs.tag }}
@@ -100,10 +101,18 @@ jobs:
         run: sh .github/scripts/check_not_frozen.sh beta "$VERSION"
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: gate-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.GITHUB_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   release:
     name: Release

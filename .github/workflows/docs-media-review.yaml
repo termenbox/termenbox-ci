@@ -33,6 +33,8 @@ jobs:
     if: contains(fromJSON('["issue_comment","issue_edited"]'), github.event.client_payload.event)
     environment: docs
     runs-on: ubuntu-latest
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -169,7 +171,11 @@ jobs:
           gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/reply.md"
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: review-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}

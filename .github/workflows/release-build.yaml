@@ -61,6 +61,8 @@ jobs:
         include:
           - { arch: x86_64, runner: ubuntu-latest, target: x86_64-unknown-linux-musl }
           - { arch: aarch64, runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -167,10 +169,17 @@ jobs:
           retention-days: 7
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: build-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # Every channel starts docker-build.yaml beside this workflow (a tag starts it for stable and beta, release-nightly.yaml
   # calls it), so the image may still be building: wait for the multi-architecture tag and record the digests the signed
@@ -190,6 +199,8 @@ jobs:
       actions: read
       contents: read
       packages: read
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -220,10 +231,19 @@ jobs:
           retention-days: 7
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: image-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.GHCR_TOKEN }}
+            ${{ secrets.GITHUB_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   manifest:
     name: Manifest, signature and publish
@@ -256,6 +276,8 @@ jobs:
       VERSION: ${{ inputs.version }}
       TAG: ${{ inputs.tag }}
       PUBLISH: ${{ inputs.publish }}
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -425,7 +447,24 @@ jobs:
           directory-salt: ${{ secrets.TERMENBOX_DIRECTORY_SALT }}
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: manifest-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            ${{ secrets.CLOUDFLARE_API_TOKEN }}
+            ${{ secrets.GITHUB_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
+            ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
+            ${{ secrets.RELEASE_SIGNING_KEY }}
+            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.TERMENBOX_CERT_SIGNING_KEY }}
+            ${{ secrets.TERMENBOX_DIRECTORY_SALT }}
+            ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+            ${{ secrets.TERMENBOX_GITHUB_CLIENT_SECRET }}

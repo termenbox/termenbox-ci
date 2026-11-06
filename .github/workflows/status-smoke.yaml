@@ -27,6 +27,8 @@ jobs:
     environment: smoke
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -48,7 +50,11 @@ jobs:
         run: sh scripts/status-smoke.sh ${CASES:+--cases "$CASES"}
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: smoke-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}

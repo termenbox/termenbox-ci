@@ -23,6 +23,8 @@ jobs:
   go-getter-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -38,7 +40,11 @@ jobs:
       - run: sh .go-getter/bin/go-getter check --stage ci
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: go-getter-checks-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}

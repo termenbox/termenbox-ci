@@ -38,6 +38,8 @@ jobs:
       contents: read
       issues: write
     timeout-minutes: 20
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -99,10 +101,14 @@ jobs:
           else gh issue create --title "$title" --label template-review --body-file "$RUNNER_TEMP/body.md"; fi
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: publish-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}
 
   gate:
     name: Check the editor's permission
@@ -112,6 +118,7 @@ jobs:
     permissions:
       contents: read
     outputs:
+      fail: ${{ steps.finish.outputs.summary }}
       ok: ${{ steps.check.outputs.ok }}
       actor: ${{ steps.check.outputs.actor }}
     steps:
@@ -136,10 +143,14 @@ jobs:
           case "$perm" in write|maintain|admin) echo "ok=true" >> "$GITHUB_OUTPUT" ;; *) echo "ignored: $ACTOR has $perm" ;; esac
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: gate-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}
 
   accept:
     name: Record an acceptance
@@ -152,6 +163,8 @@ jobs:
     concurrency:
       group: template-review-${{ github.event.client_payload.issue }}
       cancel-in-progress: false
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -184,7 +197,11 @@ jobs:
           done
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: accept-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: ${{ toJSON(secrets) }}

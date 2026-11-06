@@ -49,6 +49,7 @@ jobs:
       contents: read
       actions: read
     outputs:
+      fail: ${{ steps.finish.outputs.summary }}
       run: ${{ steps.s.outputs.run }}
       sha: ${{ steps.s.outputs.sha }}
       tag: ${{ steps.s.outputs.tag }}
@@ -117,10 +118,19 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: select-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.GITHUB_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.STATUS_TOKEN }}
 
   release:
     name: Release
@@ -183,6 +193,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -198,7 +210,15 @@ jobs:
         run: sh .github/scripts/prune_nightlies.sh 14
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: prune-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.GITHUB_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}

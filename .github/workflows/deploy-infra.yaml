@@ -43,6 +43,8 @@ jobs:
         shell: quiet {0}
         working-directory: ${{ env.TF_WORKING_DIR }}
 
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -141,7 +143,18 @@ jobs:
           echo "Client URL: $(terraform output -raw client_url)"
 
       - if: always()
+        id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
           name: terraform-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            ${{ secrets.CLOUDFLARE_API_TOKEN }}
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.R2_ACCESS_KEY_ID }}
+            ${{ secrets.R2_SECRET_ACCESS_KEY }}
+            ${{ secrets.SOURCE_TOKEN }}
