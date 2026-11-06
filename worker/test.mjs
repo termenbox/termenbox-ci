@@ -20,3 +20,10 @@ assert.equal(plan("issue_comment", { repository: repo, action: "created", issue:
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 8 }, comment: { id: 12, body: "/approve" } }), null);
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: review, comment: { id: 13, body: "approve" } }), null);
 console.log("worker plan: ok");
+
+const edited = { repository: repo, action: "edited", issue: { number: 7, labels: [{ name: "docs-media" }] }, changes: { body: { from: "x" } }, sender: { login: "owner" } };
+assert.deepEqual(plan("issues", edited), { event: "issue_edited", sha: "", base: "", pr: "", issue: "7", actor: "owner" });
+assert.equal(plan("issues", { ...edited, action: "opened" }), null);
+assert.equal(plan("issues", { ...edited, changes: { title: { from: "x" } } }), null);
+assert.equal(plan("issues", { ...edited, issue: { number: 7, labels: [{ name: "bug" }] } }), null);
+assert.equal(plan("issues", { ...edited, issue: { number: 7, labels: [{ name: "docs-media" }], pull_request: {} } }), null);

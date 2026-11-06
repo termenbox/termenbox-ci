@@ -47,6 +47,12 @@ export function plan(event, p) {
     if (!(p.issue.labels || []).some((l) => l && l.name === "docs-media")) return null;
     return { event: "issue_comment", sha: "", base: "", pr: "", issue: String(p.issue.number), comment_id: String(p.comment.id) };
   }
+  if (event === "issues") {
+    // Ticking a line of a docs-media review issue edits its body; only the number and the editor's login leave here.
+    if (p.action !== "edited" || !p.issue || p.issue.pull_request || !p.changes || !p.changes.body) return null;
+    if (!(p.issue.labels || []).some((l) => l && l.name === "docs-media")) return null;
+    return { event: "issue_edited", sha: "", base: "", pr: "", issue: String(p.issue.number), actor: String((p.sender && p.sender.login) || "") };
+  }
   return null;
 }
 

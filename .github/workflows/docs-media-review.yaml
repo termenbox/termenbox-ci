@@ -30,7 +30,7 @@ jobs:
   review:
     name: Approve or send back
     # Only the review issues, never a comment of our own.
-    if: github.event.client_payload.event == 'issue_comment'
+    if: contains(fromJSON('["issue_comment","issue_edited"]'), github.event.client_payload.event)
     environment: docs
     runs-on: ubuntu-latest
     steps:
@@ -41,18 +41,27 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
           GH_REPO: termenbox/termenbox
+          EVENT: ${{ github.event.client_payload.event }}
           COMMENT_ID: ${{ github.event.client_payload.comment_id }}
           ISSUE: ${{ github.event.client_payload.issue }}
+          SENDER: ${{ github.event.client_payload.actor }}
         run: |
-          case "$COMMENT_ID$ISSUE" in ''|*[!0-9]*) echo "ok=false" >> "$GITHUB_OUTPUT"; echo "ignored: bad ids"; exit 0 ;; esac
-          gh api "repos/termenbox/termenbox/issues/comments/$COMMENT_ID" > "$RUNNER_TEMP/comment.json"
+          case "$ISSUE" in ''|*[!0-9]*) echo "ok=false" >> "$GITHUB_OUTPUT"; echo "ignored: bad ids"; exit 0 ;; esac
           gh api "repos/termenbox/termenbox/issues/$ISSUE" > "$RUNNER_TEMP/issue.json"
-          if [ "$(jq -r '.issue_url | split("/") | last' "$RUNNER_TEMP/comment.json")" != "$ISSUE" ] || ! jq -e '[.labels[].name] | index("docs-media")' "$RUNNER_TEMP/issue.json" >/dev/null || jq -e '.pull_request' "$RUNNER_TEMP/issue.json" >/dev/null; then
+          if ! jq -e '[.labels[].name] | index("docs-media")' "$RUNNER_TEMP/issue.json" >/dev/null || jq -e '.pull_request' "$RUNNER_TEMP/issue.json" >/dev/null; then
             echo "ok=false" >> "$GITHUB_OUTPUT"; echo "ignored: not a review issue"; exit 0
           fi
-          ACTOR=$(jq -r .user.login "$RUNNER_TEMP/comment.json")
+          if [ "$EVENT" = issue_edited ]; then
+            # ticking a line edits the issue: that is an approval of the ticked lines
+            ACTOR="$SENDER"; printf '/approve\n' > "$RUNNER_TEMP/comment.txt"
+          else
+            case "$COMMENT_ID" in ''|*[!0-9]*) echo "ok=false" >> "$GITHUB_OUTPUT"; echo "ignored: bad ids"; exit 0 ;; esac
+            gh api "repos/termenbox/termenbox/issues/comments/$COMMENT_ID" > "$RUNNER_TEMP/comment.json"
+            [ "$(jq -r '.issue_url | split("/") | last' "$RUNNER_TEMP/comment.json")" = "$ISSUE" ] || { echo "ok=false" >> "$GITHUB_OUTPUT"; echo "ignored: comment of another issue"; exit 0; }
+            ACTOR=$(jq -r .user.login "$RUNNER_TEMP/comment.json")
+            jq -r .body "$RUNNER_TEMP/comment.json" > "$RUNNER_TEMP/comment.txt"
+          fi
           case "$ACTOR" in ''|null|*[!A-Za-z0-9-]*|*'[bot]') echo "ok=false" >> "$GITHUB_OUTPUT"; echo "ignored: author"; exit 0 ;; esac
-          jq -r .body "$RUNNER_TEMP/comment.json" > "$RUNNER_TEMP/comment.txt"
           jq -r '.body // ""' "$RUNNER_TEMP/issue.json" > "$RUNNER_TEMP/issue-body.txt"
           jq -r .title "$RUNNER_TEMP/issue.json" > "$RUNNER_TEMP/issue-title.txt"
           echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
@@ -132,8 +141,12 @@ jobs:
           case "$branch" in docs/media-[0-9]*) ;; *) echo "refusing to push $branch"; exit 1 ;; esac
           git config --local --unset-all http.https://github.com/.extraheader || true
           git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$DOCS_TOKEN" | base64 -w0)" push --force origin "refs/heads/$branch:refs/heads/$branch"
-          url="https://github.com/termenbox/termenbox/compare/develop...$branch?expand=1"
-          printf 'Approved by %s. Open the pull request to add them to the docs: %s\n' "$APPROVER" "$url" > "$RUNNER_TEMP/reply.md"
+          url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url // empty')
+          if [ -z "$url" ]; then
+            printf 'Why: %s approved these videos in issue #%s (run %s).\n\nWhat: adds the video, poster, stills and render.json of each approved line and fills the media markers.\n' "$APPROVER" "$ISSUE" "$RUN_ID" > "$RUNNER_TEMP/pr.md"
+            url=$(GH_TOKEN="$DOCS_TOKEN" gh pr create --base develop --head "$branch" --title "docs(media): add the walkthroughs approved in review $RUN_ID" --body-file "$RUNNER_TEMP/pr.md")
+          fi
+          printf 'Approved by %s. Pull request: %s\n' "$APPROVER" "$url" > "$RUNNER_TEMP/reply.md"
           gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/reply.md"
 
       - name: Send back
