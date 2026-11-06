@@ -1081,7 +1081,7 @@ jobs:
 
       - name: Test and run the check
         run: |
-          node --test scripts/check-security-surface.test.mjs scripts/check-security-review.test.mjs scripts/check-release-gate.test.mjs scripts/check-pinned-actions.test.mjs scripts/check-job-environments.test.mjs scripts/bundle-sign.test.mjs scripts/install-verified.test.mjs scripts/check-template-review.test.mjs scripts/check-deploy-token-scope.test.mjs scripts/check-workflow-secrets.test.mjs scripts/check-security-jobs.test.mjs
+          node --test scripts/check-security-surface.test.mjs scripts/check-security-review.test.mjs scripts/check-release-gate.test.mjs scripts/check-pinned-actions.test.mjs scripts/check-job-environments.test.mjs scripts/bundle-sign.test.mjs scripts/install-verified.test.mjs scripts/check-template-review.test.mjs scripts/check-deploy-token-scope.test.mjs scripts/check-workflow-secrets.test.mjs scripts/check-security-jobs.test.mjs scripts/check-pnpm-audit.test.mjs
           node scripts/check-security-surface.mjs
           node scripts/check-pinned-actions.mjs
           node scripts/check-job-environments.mjs
@@ -1118,6 +1118,59 @@ jobs:
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.STATUS_TOKEN }}
+
+  # Supply chain (plan step C.5): the workflow linter (policy in .github/zizmor.yml), `cargo deny` for advisories and the
+  # licence policy (deny.toml), and `pnpm audit` against the dated allowlist (.github/audit-allowlist.txt).
+  # Runs for every pull request, whatever it touches, because a new advisory appears without any change here.
+  supply-chain:
+    name: Supply chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
+        with:
+          sha: ${{ github.event.client_payload.sha }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+
+      - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        with:
+          advanced-security: false
+          min-severity: high
+
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          manifest-path: packages/server/Cargo.toml
+          command: check licenses advisories
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+
+      - name: Audit the npm dependencies
+        run: node scripts/check-pnpm-audit.mjs
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@main
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: supply-chain-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
 
   # No commit of a pull request, and no test it adds,
   # names a private finding id or an unpublished advisory id. Runs for every pull request, whatever it touches.
@@ -1203,7 +1256,7 @@ jobs:
   ci:
     name: CI result
     if: ${{ always() }}
-    needs: [changes, security-surface, commit-ids, client, rust-lint, rust-build, rust-test, e2e, browsers, browsers-real, static, e2e-static, tmux, installer, container-installer]
+    needs: [changes, security-surface, supply-chain, commit-ids, client, rust-lint, rust-build, rust-test, e2e, browsers, browsers-real, static, e2e-static, tmux, installer, container-installer]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

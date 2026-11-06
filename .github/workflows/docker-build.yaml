@@ -71,6 +71,7 @@ jobs:
       - id: p
         env:
           CALL_TAGS: ${{ inputs.tags }}
+          SHA: ${{ inputs.sha || github.event.client_payload.sha }}
           CALL_VERSION: ${{ inputs.version }}
           DISPATCH_TAG: ${{ github.event.inputs.tag }}
         run: |
@@ -97,7 +98,7 @@ jobs:
           fi
           {
             if [ "$TB_EVENT" = pull_request ]; then channel=""; fi
-            echo "run=$run"; echo "channel=$channel"; echo "version=$version"; echo "sha=${{ inputs.sha || github.event.client_payload.sha }}"
+            echo "run=$run"; echo "channel=$channel"; echo "version=$version"; echo "sha=$SHA"
             echo "tags<<EOF"; for t in $tags; do echo "type=raw,value=$t"; done; echo "EOF"
           } >> "$GITHUB_OUTPUT"
 

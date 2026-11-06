@@ -40,9 +40,11 @@ jobs:
         with:
           node-version: '24'
       - name: Install tmux and Claude Code
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           sudo apt-get update && sudo apt-get install -y tmux
-          npm install -g "@anthropic-ai/claude-code@${{ inputs.version }}"
+          npm install -g "@anthropic-ai/claude-code@$VERSION"
       - name: Compare hook order with the fixtures
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
