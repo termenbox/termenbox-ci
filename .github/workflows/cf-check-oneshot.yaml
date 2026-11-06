@@ -1,0 +1,35 @@
+# One-shot: reports what each release Environment's Cloudflare token reaches, as status codes only. Deleted after use.
+name: cf-check-oneshot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [nightly, beta, stable]
+    name: probe ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.env }}
+    steps:
+      - name: Probe
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACC: ${{ vars.R2_RELEASE_ACCOUNT_ID }}
+          SECRET_ACC: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJ: termenbox-${{ matrix.env }}
+          DB: 93cd229e-b170-4981-b6d2-b061e4e53767
+        run: |
+          api() { curl -s -o /tmp/r.json -w '%{http_code}' -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4$1"; }
+          errs() { jq -r '[.errors[]?.code]|join(",")' /tmp/r.json 2>/dev/null; }
+          [ "$SECRET_ACC" = "$ACC" ] && echo "account secret equals release account: yes" || echo "account secret equals release account: NO"
+          [ -n "$CF_TOKEN" ] && echo "token present: yes" || echo "token present: NO"
+          p=$PROJ; [ "$PROJ" = termenbox-stable ] && p=termenbox
+          c=$(api "/accounts/$ACC/d1/database/$DB"); echo "d1 get: http $c errs=$(errs)"
+          c=$(api "/accounts/$ACC/pages/projects/$p"); echo "pages get ($p): http $c errs=$(errs)"
+          c=$(api "/accounts/$ACC/pages/projects"); echo "pages list: http $c errs=$(errs)"
