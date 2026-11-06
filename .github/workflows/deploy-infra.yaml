@@ -110,6 +110,7 @@ jobs:
             -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
             -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
             -var="cloudflare_zone_name=${{ vars.CLOUDFLARE_ZONE_NAME }}" \
+            -var="release_account_id=${{ vars.R2_RELEASE_ACCOUNT_ID }}" \
             -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
             -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}" \
             -var="pages_project_name=${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}"
@@ -126,6 +127,7 @@ jobs:
               -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
               -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
               -var="cloudflare_zone_name=${{ vars.CLOUDFLARE_ZONE_NAME }}" \
+              -var="release_account_id=${{ vars.R2_RELEASE_ACCOUNT_ID }}" \
               -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
               -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}" \
               -var="pages_project_name=${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}"
