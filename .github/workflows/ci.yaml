@@ -1082,7 +1082,7 @@ jobs:
 
       - name: Test and run the check
         run: |
-          node --test scripts/check-security-surface.test.mjs scripts/check-security-review.test.mjs scripts/check-release-gate.test.mjs scripts/check-pinned-actions.test.mjs scripts/check-job-environments.test.mjs scripts/bundle-sign.test.mjs scripts/install-verified.test.mjs scripts/check-template-review.test.mjs scripts/check-deploy-token-scope.test.mjs scripts/check-workflow-secrets.test.mjs scripts/check-security-jobs.test.mjs scripts/check-pnpm-audit.test.mjs
+          node --test scripts/check-security-surface.test.mjs scripts/check-security-review.test.mjs scripts/check-release-gate.test.mjs scripts/check-pinned-actions.test.mjs scripts/check-job-environments.test.mjs scripts/bundle-sign.test.mjs scripts/install-verified.test.mjs scripts/check-template-review.test.mjs scripts/check-deploy-token-scope.test.mjs scripts/check-workflow-secrets.test.mjs scripts/check-security-jobs.test.mjs scripts/check-pnpm-audit.test.mjs scripts/check-cert-kid.test.mjs
           node scripts/check-security-surface.mjs
           node scripts/check-pinned-actions.mjs
           node scripts/check-job-environments.mjs

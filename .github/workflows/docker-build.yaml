@@ -110,12 +110,12 @@ jobs:
         env:
           SHA: ${{ steps.p.outputs.sha }}
         run: |
-          # Rule 1: the gate runs from master's copy of its script and the script it imports, not from the commit's checkout.
+          # Rule 1: the gate runs from master's copy of its script and the scripts it runs, not from the commit's checkout.
           set -eu
           git fetch -q origin master
           gate="$RUNNER_TEMP/gate"
           mkdir -p "$gate"
-          for f in check-security-review.mjs check-security-surface.mjs; do
+          for f in check-security-review.mjs check-security-surface.mjs check-security-counts.mjs; do
             git show "origin/master:scripts/$f" > "$gate/$f" || { echo "scripts/$f is not on origin/master: the release gate cannot run, so no image is pushed"; exit 1; }
           done
           node "$gate/check-security-review.mjs" "$SHA"
