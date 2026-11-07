@@ -63,8 +63,9 @@ jobs:
       scripted: ${{ steps.scope.outputs.scripted }}
       media: ${{ steps.scope.outputs.media }}
       smoke: ${{ steps.scope.outputs.smoke }}
-      skip: ${{ steps.scope.outputs.skip }}
-      skip_static: ${{ steps.scope.outputs.skip_static }}
+      browsers_matrix: ${{ steps.matrices.outputs.browsers }}
+      real_matrix: ${{ steps.matrices.outputs.real }}
+      static_matrix: ${{ steps.matrices.outputs.static }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -95,28 +96,64 @@ jobs:
             # A push repeats the run its pull request passed: build, lint, unit tests and one Chromium leg, and the
             # `ci` status still posts (decision 0221). The other engines and the binaries run on the daily run.
             printf 'code=true\nscripted=true\nmedia=true\nsmoke=true\n' | tee -a "$GITHUB_OUTPUT"
-            printf 'skip=%s\n' '[{"engine":"firefox"},{"engine":"webkit"},{"engine":"chromium","runs":"desktop:1440x900:2"}]' | tee -a "$GITHUB_OUTPUT"
-            printf 'skip_static=%s\n' '[]' | tee -a "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ "$EVENT" != pull_request ]; then
+            echo '[{"engine":"firefox"},{"engine":"webkit"},{"engine":"chromium","runs":"desktop:1440x900:2"}]' > skip.json
+            echo '[]' > skip_static.json
+          elif [ "$EVENT" != pull_request ]; then
             # A manual or daily run does everything.
-            printf 'code=true\nscripted=true\nmedia=true\nsmoke=false\nskip=[]\nskip_static=[]\n' | tee -a "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # A failed or empty lookup reads as "everything changed": the script then turns every job on.
-          gh api --paginate "repos/termenbox/termenbox-source/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)' > paths.txt || : > paths.txt
-          sh .github/scripts/ci-scope.sh < paths.txt | tee -a "$GITHUB_OUTPUT"
-          # A pull request runs Chromium always and WebKit only when the client changed (WebKit is the proxy for
-          # iOS Safari 16.4+); Firefox and the aarch64 binary run on the daily run. An empty
-          # lookup counts as a client change.
-          echo 'smoke=false' | tee -a "$GITHUB_OUTPUT"
-          if [ ! -s paths.txt ] || grep -q '^packages/client/' paths.txt; then
-            echo 'skip=[{"engine":"firefox"}]' | tee -a "$GITHUB_OUTPUT"
+            printf 'code=true\nscripted=true\nmedia=true\nsmoke=false\n' | tee -a "$GITHUB_OUTPUT"
+            echo '[]' > skip.json
+            echo '[]' > skip_static.json
           else
-            echo 'skip=[{"engine":"firefox"},{"engine":"webkit"}]' | tee -a "$GITHUB_OUTPUT"
+            # A failed or empty lookup reads as "everything changed": the script then turns every job on.
+            gh api --paginate "repos/termenbox/termenbox-source/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)' > paths.txt || : > paths.txt
+            sh .github/scripts/ci-scope.sh < paths.txt | tee -a "$GITHUB_OUTPUT"
+            echo 'smoke=false' | tee -a "$GITHUB_OUTPUT"
+            # A pull request runs Chromium always and WebKit only when the client changed (WebKit is the proxy for
+            # iOS Safari 16.4+); Firefox and the aarch64 binary run on the daily run. An empty lookup counts as a
+            # client change.
+            if [ ! -s paths.txt ] || grep -q '^packages/client/' paths.txt; then
+              echo '[{"engine":"firefox"}]' > skip.json
+            else
+              echo '[{"engine":"firefox"},{"engine":"webkit"}]' > skip.json
+            fi
+            echo '[{"arch":"aarch64"}]' > skip_static.json
           fi
-          echo 'skip_static=[{"arch":"aarch64"}]' | tee -a "$GITHUB_OUTPUT"
+
+      # The matrices of the jobs that depend on the event. `exclude` does not apply to an `include`-only matrix, so each
+      # job takes its legs from here: every leg of the list below minus the legs that match a skip entry.
+      - name: Matrices
+        id: matrices
+        shell: bash
+        run: |
+          cat > browsers.json <<'JSON'
+          [
+            { "engine": "chromium", "runs": "desktop:1024x768:1" },
+            { "engine": "chromium", "runs": "desktop:1440x900:2" },
+            { "engine": "firefox", "runs": "desktop:1024x768:1" },
+            { "engine": "firefox", "runs": "desktop:1440x900:2" },
+            { "engine": "webkit", "runs": "desktop:1024x768:1" },
+            { "engine": "webkit", "runs": "desktop:1440x900:2" },
+            { "engine": "webkit", "runs": "phone:390x844:3" }
+          ]
+          JSON
+          cat > real.json <<'JSON'
+          [
+            { "name": "chromium", "engine": "chromium", "runs": "realserver:1024x768:1 realserver:1440x900:2" },
+            { "name": "firefox", "engine": "firefox", "runs": "realserver:1024x768:1 realserver:1440x900:2" },
+            { "name": "webkit-desktop", "engine": "webkit", "runs": "realserver:1024x768:1 realserver:1440x900:2" },
+            { "name": "webkit-phone", "engine": "webkit", "runs": "realserver:390x844:3 phone-real:390x844:3" }
+          ]
+          JSON
+          cat > static.json <<'JSON'
+          [
+            { "arch": "x86_64", "runner": "ubuntu-latest", "target": "x86_64-unknown-linux-musl" },
+            { "arch": "aarch64", "runner": "ubuntu-24.04-arm", "target": "aarch64-unknown-linux-musl" }
+          ]
+          JSON
+          pick() { jq -c --slurpfile skip "$2" '. as $all | $all | map(select(. as $e | ($skip[0] | any(. as $s | $s | to_entries | all(.value == $e[.key]))) | not))' "$1"; }
+          echo "browsers=$(pick browsers.json skip.json)" | tee -a "$GITHUB_OUTPUT"
+          echo "real=$(pick real.json skip.json)" | tee -a "$GITHUB_OUTPUT"
+          echo "static=$(pick static.json skip_static.json)" | tee -a "$GITHUB_OUTPUT"
 
       - if: always()
         id: finish
@@ -542,17 +579,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # One leg per run (`suite:size:ratio`; a leg may list several, separated by spaces): the legs are the unit of
-        # parallelism, so a new engine or viewport is one more line.
-        include:
-          - { engine: chromium, runs: 'desktop:1024x768:1' }
-          - { engine: chromium, runs: 'desktop:1440x900:2' }
-          - { engine: firefox, runs: 'desktop:1024x768:1' }
-          - { engine: firefox, runs: 'desktop:1440x900:2' }
-          - { engine: webkit, runs: 'desktop:1024x768:1' }
-          - { engine: webkit, runs: 'desktop:1440x900:2' }
-          - { engine: webkit, runs: 'phone:390x844:3' }
-        exclude: ${{ fromJSON(needs.changes.outputs.skip) }}
+        include: ${{ fromJSON(needs.changes.outputs.browsers_matrix) }}
     container: ${{ matrix.engine != 'chromium' && 'ghcr.io/termenbox/termenbox-ci:latest' || '' }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
@@ -647,12 +674,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { name: chromium, engine: chromium, runs: 'realserver:1024x768:1 realserver:1440x900:2' }
-          - { name: firefox, engine: firefox, runs: 'realserver:1024x768:1 realserver:1440x900:2' }
-          - { name: webkit-desktop, engine: webkit, runs: 'realserver:1024x768:1 realserver:1440x900:2' }
-          - { name: webkit-phone, engine: webkit, runs: 'realserver:390x844:3 phone-real:390x844:3' }
-        exclude: ${{ fromJSON(needs.changes.outputs.skip) }}
+        include: ${{ fromJSON(needs.changes.outputs.real_matrix) }}
     container: ${{ matrix.engine != 'chromium' && 'ghcr.io/termenbox/termenbox-ci:latest' || '' }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
@@ -753,10 +775,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { arch: x86_64, runner: ubuntu-latest, target: x86_64-unknown-linux-musl }
-          - { arch: aarch64, runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
-        exclude: ${{ fromJSON(needs.changes.outputs.skip_static) }}
+        include: ${{ fromJSON(needs.changes.outputs.static_matrix) }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
