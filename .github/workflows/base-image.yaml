@@ -3,7 +3,7 @@ run-name: "Build Base Image · ${{ github.event.client_payload.pr && format('PR 
 
 # The runtime base (node, tmux, git, ...) changes rarely. App builds start FROM it and skip all package installs, and the
 # release images carry whatever it holds, so it is built only from a commit that is already on master (a reviewed
-# release) and only after the owner approves the `base` Environment. A rebuilt base reaches the app image when the
+# release) and the job refuses any other commit. A rebuilt base reaches the app image when the
 # digest in docker/Dockerfile is moved in a reviewed change (.github/scripts/check-pins.sh --images lists it).
 on:
   repository_dispatch:
@@ -60,7 +60,6 @@ jobs:
     needs: [gate]
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
-    environment: base
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
