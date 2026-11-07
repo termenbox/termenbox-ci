@@ -1,4 +1,3 @@
-# Generated from the Termenbox source. Do not edit here.
 name: Release build
 
 # The build, manifest, signature and publish steps of every channel. The wrappers release-stable.yaml,

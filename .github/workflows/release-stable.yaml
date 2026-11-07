@@ -1,4 +1,3 @@
-# Generated from the Termenbox source. Do not edit here.
 name: Release (stable)
 run-name: "Release (stable) · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', github.event.client_payload.sha) || '' }}"
 
@@ -90,13 +89,13 @@ jobs:
       - name: Security review gate
         if: steps.g.outputs.run == 'true'
         run: |
-          # Rule 1: the gate runs from master's copy of its script and the script it imports, not from the release
+          # Rule 1: the gate runs from master's copy of its script and the scripts it runs, not from the release
           # commit's checkout. A script not yet on master stops the release.
           set -eu
           git fetch -q origin master
           gate="$RUNNER_TEMP/gate"
           mkdir -p "$gate"
-          for f in check-security-review.mjs check-security-surface.mjs; do
+          for f in check-security-review.mjs check-security-surface.mjs check-security-counts.mjs; do
             git show "origin/master:scripts/$f" > "$gate/$f" || { echo "scripts/$f is not on origin/master: the release gate cannot run, so nothing is released"; exit 1; }
           done
           node "$gate/check-security-review.mjs" "$(git rev-parse HEAD)"

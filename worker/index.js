@@ -47,7 +47,8 @@ export function plan(event, p) {
   if (event === "issue_comment") {
     if (p.action !== "created" || !p.issue) return null;
     if (!String(p.comment && p.comment.body).startsWith("/")) return null;
-    if (p.issue.pull_request) return { event: "comment", sha: "", base: "", pr: String(p.issue.number), comment_id: String(p.comment.id) };
+    // No workflow follows a comment on a pull request, so none is sent (it would only start runs that skip).
+    if (p.issue.pull_request) return null;
     // A docs-media review issue: only its number and the comment id leave here; the workflow fetches the author and text itself.
     if (!(p.issue.labels || []).some((l) => l && l.name === "docs-media")) return null;
     return { event: "issue_comment", sha: "", base: "", pr: "", issue: String(p.issue.number), comment_id: String(p.comment.id) };
@@ -62,8 +63,9 @@ export function plan(event, p) {
   return null;
 }
 
-// The dispatch types to send for a planned event: a workflow listens only to the types it needs (scripts/port-workflow.py in the
-// source), so a tag-only or master-only workflow gets no run, and holds no runner, for a push it would skip.
+// The dispatch types to send for a planned event: a workflow listens only to the types it needs (its `on.repository_dispatch.types`),
+// so a tag-only or master-only workflow gets no run, and holds no runner, for a push it would skip. worker/triggers.test.mjs
+// pins which workflows listen to which type: change a type and a workflow together.
 export function typesFor(cp, p) {
   if (cp.event === "tag") return ["source-tag"];
   if (cp.event === "push") return p.ref === "refs/heads/master" ? ["source-pushed", "source-master"] : ["source-pushed"];

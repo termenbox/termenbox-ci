@@ -1,10 +1,16 @@
-# Generated from the Termenbox source. Do not edit here.
 name: CI
-run-name: "CI · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', github.event.client_payload.sha) || '' }}"
+run-name: "CI · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ (github.event.client_payload.sha || inputs.sha) && format(' · {0}', (github.event.client_payload.sha || inputs.sha)) || '' }}"
 
 on:
   repository_dispatch:
     types: [source-pushed]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Source commit to run on (a test of this workflow from a ci-repo branch); empty means the head of develop'
+        type: string
+        required: true
+        default: ''
 
 permissions:
   contents: read
@@ -24,7 +30,7 @@ env:
 # This file is canonical for the build setup: release-build.yaml follows it (same cargo env, same cache keys, the
 # bundled tmux restored from what the tmux job saved) and never writes the caches itself.
 concurrency:
-  group: ci-${{ github.event.client_payload.event }}-${{ github.event.client_payload.event == 'push' && github.event.client_payload.sha || format('pr-{0}', github.event.client_payload.pr) }}
+  group: ci-${{ github.event.client_payload.event }}-${{ github.event.client_payload.event == 'push' && (github.event.client_payload.sha || inputs.sha) || format('pr-{0}', github.event.client_payload.pr) }}
   cancel-in-progress: ${{ github.event.client_payload.event == 'pull_request' }}
 
 # Caches (Swatinem/rust-cache) are written only by pushes to master/develop (save-if). A PR restores from its base
@@ -73,7 +79,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
       - name: Scope
         id: scope
@@ -117,7 +123,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
@@ -205,7 +211,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
@@ -266,7 +272,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - name: Install Rust toolchain
@@ -314,7 +320,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - name: Install Rust toolchain
@@ -365,7 +371,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - name: Install Rust toolchain
@@ -440,7 +446,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
@@ -531,7 +537,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
@@ -629,7 +635,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
@@ -731,7 +737,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - name: Install Rust toolchain
@@ -800,7 +806,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
@@ -876,7 +882,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - name: Restore the tmux build
@@ -947,7 +953,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
@@ -1011,7 +1017,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
@@ -1073,7 +1079,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
@@ -1082,7 +1088,7 @@ jobs:
 
       - name: Test and run the check
         run: |
-          node --test scripts/check-security-surface.test.mjs scripts/check-security-review.test.mjs scripts/check-release-gate.test.mjs scripts/check-pinned-actions.test.mjs scripts/check-job-environments.test.mjs scripts/bundle-sign.test.mjs scripts/install-verified.test.mjs scripts/check-template-review.test.mjs scripts/check-deploy-token-scope.test.mjs scripts/check-workflow-secrets.test.mjs scripts/check-security-jobs.test.mjs scripts/check-pnpm-audit.test.mjs
+          node --test scripts/check-security-surface.test.mjs scripts/check-security-review.test.mjs scripts/check-release-gate.test.mjs scripts/check-pinned-actions.test.mjs scripts/check-job-environments.test.mjs scripts/bundle-sign.test.mjs scripts/install-verified.test.mjs scripts/check-template-review.test.mjs scripts/check-deploy-token-scope.test.mjs scripts/check-workflow-secrets.test.mjs scripts/check-security-jobs.test.mjs scripts/check-pnpm-audit.test.mjs scripts/check-cert-kid.test.mjs
           node scripts/check-security-surface.mjs
           node scripts/check-pinned-actions.mjs
           node scripts/check-job-environments.mjs
@@ -1136,7 +1142,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
@@ -1186,7 +1192,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
           depth: 0
           base: ${{ github.event.client_payload.base }}
@@ -1194,7 +1200,7 @@ jobs:
         if: github.event.client_payload.event == 'pull_request'
         env:
           BASE: ${{ github.event.client_payload.base }}
-          HEAD: ${{ github.event.client_payload.sha }}
+          HEAD: ${{ (github.event.client_payload.sha || inputs.sha) }}
         run: node scripts/check-commit-ids.mjs "$BASE" "$HEAD"
 
       - if: always()
@@ -1231,7 +1237,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
       - name: Keep the newest entry of every cache group

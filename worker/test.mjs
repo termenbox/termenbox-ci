@@ -12,7 +12,7 @@ const pr = (head, action = "opened") => ({ repository: repo, action, pull_reques
 assert.deepEqual(plan("pull_request", pr(repo)), { event: "pull_request", sha: A, base: B, pr: "7" });
 assert.equal(plan("pull_request", pr({ full_name: "fork/termenbox" })), null);
 assert.equal(plan("pull_request", pr(repo, "closed")), null);
-assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 3, pull_request: {} }, comment: { id: 9, body: "/regen" } }).event, "comment");
+assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 3, pull_request: {} }, comment: { id: 9, body: "/regen" } }), null);
 assert.equal(plan("issue_comment", { repository: repo, action: "created", issue: { number: 3, pull_request: {} }, comment: { id: 9, body: "hello" } }), null);
 const review = { number: 7, labels: [{ name: "docs-media" }] };
 assert.deepEqual(plan("issue_comment", { repository: repo, action: "created", issue: review, comment: { id: 11, body: "/approve" } }), { event: "issue_comment", sha: "", base: "", pr: "", issue: "7", comment_id: "11" });

@@ -1,6 +1,5 @@
-# Generated from the Termenbox source. Do not edit here.
 name: Build CI Image
-run-name: "Build CI Image · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', github.event.client_payload.sha) || '' }}"
+run-name: "Build CI Image · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ (github.event.client_payload.sha || inputs.sha) && format(' · {0}', (github.event.client_payload.sha || inputs.sha)) || '' }}"
 
 # CI image for the browser matrix jobs. The Playwright OS deps and browser binaries change rarely;
 # rebuilding weekly picks up OS security fixes and a new Playwright build, and the matrix jobs then
@@ -11,6 +10,12 @@ on:
   schedule:
     - cron: '17 4 * * 1'
   workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Source commit to run on (a test of this workflow from a ci-repo branch); empty means the head of develop'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -38,7 +43,7 @@ jobs:
           GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
           EVENT: ${{ github.event.client_payload.event || 'other' }}
           BASE: ${{ github.event.client_payload.base }}
-          SHA: ${{ github.event.client_payload.sha }}
+          SHA: ${{ (github.event.client_payload.sha || inputs.sha) }}
         run: |
           yes() { echo run=true >> "$GITHUB_OUTPUT"; exit 0; }
           case "$EVENT" in tag|pull_request|comment) echo run=false >> "$GITHUB_OUTPUT"; exit 0 ;; esac
@@ -47,7 +52,7 @@ jobs:
           files=$(gh api "repos/termenbox/termenbox-source/compare/$BASE...$SHA" --jq '.files[].filename' 2>/dev/null) || yes
           for f in $files; do
             case "$f" in
-              docker/Dockerfile.ci|.github/workflows/ci-image.yaml) yes ;;
+              docker/Dockerfile.ci) yes ;;
             esac
           done
           echo run=false >> "$GITHUB_OUTPUT"
@@ -64,7 +69,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
@@ -102,7 +107,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
-          SHA: ${{ github.event.client_payload.sha }}
+          SHA: ${{ (github.event.client_payload.sha || inputs.sha) }}
           STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
           DESC: ${{ steps.finish.outputs.summary || 'ci result' }}
         run: |

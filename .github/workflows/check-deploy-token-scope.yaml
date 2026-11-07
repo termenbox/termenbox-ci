@@ -1,4 +1,3 @@
-# Generated from the Termenbox source. Do not edit here.
 name: Check Deploy Token Scope
 
 # Weekly, confirm each environment's Cloudflare token is active, expires,

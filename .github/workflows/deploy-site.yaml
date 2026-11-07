@@ -1,12 +1,16 @@
-# Generated from the Termenbox source. Do not edit here.
 name: Deploy landing site
-run-name: "Deploy landing site · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', github.event.client_payload.sha) || '' }}"
+run-name: "Deploy landing site · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ (github.event.client_payload.sha || inputs.sha) && format(' · {0}', (github.event.client_payload.sha || inputs.sha)) || '' }}"
 
 on:
   repository_dispatch:
     types: [source-master]
   workflow_dispatch:
     inputs:
+      sha:
+        description: 'Source commit to run on (a test of this workflow from a ci-repo branch); empty means the head of develop'
+        type: string
+        required: false
+        default: ''
       preview:
         description: 'Preview alias (letters, digits, dashes). Empty deploys production from master only.'
         required: false
@@ -39,7 +43,7 @@ jobs:
           GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
           EVENT: ${{ github.event.client_payload.event || 'other' }}
           BASE: ${{ github.event.client_payload.base }}
-          SHA: ${{ github.event.client_payload.sha }}
+          SHA: ${{ (github.event.client_payload.sha || inputs.sha) }}
         run: |
           yes() { echo run=true >> "$GITHUB_OUTPUT"; exit 0; }
           case "$EVENT" in tag|pull_request|comment) echo run=false >> "$GITHUB_OUTPUT"; exit 0 ;; esac
@@ -48,7 +52,7 @@ jobs:
           files=$(gh api "repos/termenbox/termenbox-source/compare/$BASE...$SHA" --jq '.files[].filename' 2>/dev/null) || yes
           for f in $files; do
             case "$f" in
-              packages/site/*|scripts/check-site.mjs|scripts/build-site.mjs|docs/course/*|docs/media/*|README.md|.github/workflows/deploy-site.yaml) yes ;;
+              packages/site/*|scripts/check-site.mjs|scripts/build-site.mjs|docs/course/*|docs/media/*|README.md) yes ;;
             esac
           done
           echo run=false >> "$GITHUB_OUTPUT"
@@ -66,7 +70,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
           remote: true
 
