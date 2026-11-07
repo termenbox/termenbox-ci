@@ -149,7 +149,7 @@ jobs:
         with:
           name: docs-media-${{ github.run_id }}
           path: media
-          retention-days: 30
+          retention-days: 7
           if-no-files-found: error
 
       - name: Install Wrangler

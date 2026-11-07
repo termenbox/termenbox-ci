@@ -62,6 +62,9 @@ jobs:
       code: ${{ steps.scope.outputs.code }}
       scripted: ${{ steps.scope.outputs.scripted }}
       media: ${{ steps.scope.outputs.media }}
+      smoke: ${{ steps.scope.outputs.smoke }}
+      skip: ${{ steps.scope.outputs.skip }}
+      skip_static: ${{ steps.scope.outputs.skip_static }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
 
@@ -88,13 +91,32 @@ jobs:
           EVENT: ${{ github.event.client_payload.event }}
           PR: ${{ github.event.client_payload.pr }}
         run: |
+          if [ "$EVENT" = push ]; then
+            # A push repeats the run its pull request passed: build, lint, unit tests and one Chromium leg, and the
+            # `ci` status still posts (decision 0221). The other engines and the binaries run on the daily run.
+            printf 'code=true\nscripted=true\nmedia=true\nsmoke=true\n' | tee -a "$GITHUB_OUTPUT"
+            printf 'skip=%s\n' '[{"engine":"firefox"},{"engine":"webkit"},{"engine":"chromium","runs":"desktop:1440x900:2"}]' | tee -a "$GITHUB_OUTPUT"
+            printf 'skip_static=%s\n' '[]' | tee -a "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ "$EVENT" != pull_request ]; then
-            printf 'code=true\nscripted=true\nmedia=true\n' | tee -a "$GITHUB_OUTPUT"
+            # A manual or daily run does everything.
+            printf 'code=true\nscripted=true\nmedia=true\nsmoke=false\nskip=[]\nskip_static=[]\n' | tee -a "$GITHUB_OUTPUT"
             exit 0
           fi
           # A failed or empty lookup reads as "everything changed": the script then turns every job on.
           gh api --paginate "repos/termenbox/termenbox-source/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)' > paths.txt || : > paths.txt
           sh .github/scripts/ci-scope.sh < paths.txt | tee -a "$GITHUB_OUTPUT"
+          # A pull request runs Chromium always and WebKit only when the client changed (WebKit is the proxy for
+          # iOS Safari 16.4+); Firefox and the aarch64 binary run on the daily run. An empty
+          # lookup counts as a client change.
+          echo 'smoke=false' | tee -a "$GITHUB_OUTPUT"
+          if [ ! -s paths.txt ] || grep -q '^packages/client/' paths.txt; then
+            echo 'skip=[{"engine":"firefox"}]' | tee -a "$GITHUB_OUTPUT"
+          else
+            echo 'skip=[{"engine":"firefox"},{"engine":"webkit"}]' | tee -a "$GITHUB_OUTPUT"
+          fi
+          echo 'skip_static=[{"arch":"aarch64"}]' | tee -a "$GITHUB_OUTPUT"
 
       - if: always()
         id: finish
@@ -432,7 +454,8 @@ jobs:
   # add a number to `shard`.
   e2e:
     name: Browser end-to-end and resource gates (${{ matrix.shard }}/${{ strategy.job-total }})
-    needs: rust-build
+    needs: [changes, rust-build]
+    if: needs.changes.outputs.smoke != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -529,6 +552,7 @@ jobs:
           - { engine: webkit, runs: 'desktop:1024x768:1' }
           - { engine: webkit, runs: 'desktop:1440x900:2' }
           - { engine: webkit, runs: 'phone:390x844:3' }
+        exclude: ${{ fromJSON(needs.changes.outputs.skip) }}
     container: ${{ matrix.engine != 'chromium' && 'ghcr.io/termenbox/termenbox-ci:latest' || '' }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
@@ -616,7 +640,8 @@ jobs:
   # binary has no glibc dependency and is also the production binary, so this matches what users install.
   browsers-real:
     name: Browser matrix, real server (${{ matrix.name }})
-    needs: [rust-build, static]
+    needs: [changes, rust-build, static]
+    if: needs.changes.outputs.smoke != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -627,6 +652,7 @@ jobs:
           - { name: firefox, engine: firefox, runs: 'realserver:1024x768:1 realserver:1440x900:2' }
           - { name: webkit-desktop, engine: webkit, runs: 'realserver:1024x768:1 realserver:1440x900:2' }
           - { name: webkit-phone, engine: webkit, runs: 'realserver:390x844:3 phone-real:390x844:3' }
+        exclude: ${{ fromJSON(needs.changes.outputs.skip) }}
     container: ${{ matrix.engine != 'chromium' && 'ghcr.io/termenbox/termenbox-ci:latest' || '' }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
@@ -721,7 +747,7 @@ jobs:
   static:
     name: Static binary (${{ matrix.arch }})
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.smoke != 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     strategy:
@@ -730,6 +756,7 @@ jobs:
         include:
           - { arch: x86_64, runner: ubuntu-latest, target: x86_64-unknown-linux-musl }
           - { arch: aarch64, runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+        exclude: ${{ fromJSON(needs.changes.outputs.skip_static) }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
@@ -753,7 +780,7 @@ jobs:
         with:
           shared-key: static-${{ matrix.arch }}
           key: ${{ matrix.target }}
-          save-if: ${{ github.event.client_payload.event == 'push' }}
+          save-if: ${{ github.event.client_payload.event == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
 
       - name: Build
         env:
@@ -777,7 +804,7 @@ jobs:
         with:
           name: termenbox-server-musl-${{ matrix.arch }}
           path: target/${{ matrix.target }}/release/termenbox-server
-          retention-days: 7
+          retention-days: 1
 
       - if: always()
         id: finish
@@ -919,7 +946,7 @@ jobs:
             tmux-out/tmux-COPYING
             tmux-out/tmux-libevent-LICENSE
             tmux-out/tmux-ncurses-COPYING
-          retention-days: 7
+          retention-days: 1
 
       - if: always()
         id: finish
@@ -1246,6 +1273,7 @@ jobs:
             .github/scripts/prune-caches.sh "v0-rust-$g-" 1
           done
           .github/scripts/prune-caches.sh node-cache- 2
+          .github/scripts/prune-caches.sh codeql-overlay-base-database- 2
 
       - if: always()
         id: finish
@@ -1284,10 +1312,11 @@ jobs:
               result = job["result"]
               if result == "success":
                   continue
-              allowed = result == "skipped" and ((out.get("code") == "false" and not (name == "client" and out.get("media") != "false")) or (name == "browsers" and out.get("scripted") == "false"))
+              smoke_skips = ("e2e", "browsers-real", "static", "e2e-static", "installer", "container-installer")
+              allowed = result == "skipped" and ((out.get("code") == "false" and not (name == "client" and out.get("media") != "false")) or (name == "browsers" and out.get("scripted") == "false") or (out.get("smoke") == "true" and name in smoke_skips))
               if not allowed:
                   bad.append(name + ": " + result)
-          print("code=%s scripted=%s media=%s" % (out.get("code"), out.get("scripted"), out.get("media")))
+          print("code=%s scripted=%s media=%s smoke=%s" % (out.get("code"), out.get("scripted"), out.get("media"), out.get("smoke")))
           if bad:
               print("not green: " + ", ".join(bad))
               sys.exit(1)
