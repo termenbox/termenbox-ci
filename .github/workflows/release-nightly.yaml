@@ -1,15 +1,13 @@
-# Generated from the Termenbox source. Do not edit here.
 name: Release (nightly)
 
-# One nightly a day from a develop commit whose CI is green (decisions 0129, 0130). It runs when CI finishes green on
-# develop (the first green commit of a UTC day becomes that day's nightly) and at 00:00 UTC as a fallback, which
-# builds the newest green develop commit. It never builds a red head: the commit comes from a successful CI run,
-# not from the branch tip. Tag vYYYY.MM.DD-nightly (-nightly.N for the Nth of a day), manifest version X.Y.Z-nightly.YYYYMMDD (.N), signed by the
+# One nightly a day, at 00:00 UTC, from the newest develop commit whose `ci` status is green. It never builds a red
+# head: the commit comes from a green status, not from the branch tip. (A run of this repo's CI names no source commit,
+# so the nightly does not follow it; the cron is the only trigger.)
+# Tag vYYYY.MM.DD-nightly (-nightly.N for the Nth of a day), manifest version X.Y.Z-nightly.YYYYMMDD (.N), signed by the
 # nightly key `n1` from the `nightly` environment. Keeps 14 days of nightlies, never the one channel-nightly
 # points at. Run by hand it is a dry run unless `publish` is ticked.
 #
-# It publishes to the nightly/ path of the R2 bucket and to the Releases of the product repo (release-build.yaml, decision
-# 0212), and nothing else: no stable or beta path, key or alias. It does not call the security review gate.
+# It publishes to the nightly/ path of the R2 bucket and to the Releases of the product repo (release-build.yaml), and nothing else: no stable or beta path, key or alias. It does not call the security review gate.
 # The Releases it reads are those of the public product repo, with the workflow token (CI_TOKEN and CI_REPO below); the
 # prune job deletes in them with MIRROR_TOKEN of the nightly environment; the other GH_TOKEN reads the source.
 
@@ -30,7 +28,7 @@ defaults:
   run:
     shell: quiet {0}
 
-# Two triggers can overlap (CI finishing at midnight); a second run waits and then sees today's release.
+# A manual run can overlap the cron; a second run waits and then sees today's release.
 concurrency:
   group: release-nightly
   cancel-in-progress: false
@@ -42,8 +40,6 @@ env:
 jobs:
   select:
     name: Select the commit
-    # a workflow_run fires for every CI run on a branch named develop, including a failed one and a pull request's
-    if: (github.event.client_payload.event || github.event_name) != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -75,18 +71,13 @@ jobs:
           CI_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI_REPO: termenbox/termenbox
           EVENT: ${{ (github.event.client_payload.event || github.event_name) }}
-          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           DISPATCH_PUBLISH: ${{ inputs.publish }}
         run: |
           git fetch -q origin develop
-          if [ "$EVENT" = workflow_run ]; then
-            sha="$RUN_SHA"
-          else
-            sha=""; for c in $(gh api "repos/termenbox/termenbox-source/commits?sha=develop&per_page=30" --jq '.[].sha'); do
-            n="$(GH_TOKEN="$STATUS_TOKEN" gh api "repos/termenbox/termenbox-source/commits/$c/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
-            if [ "${n:-0}" -gt 0 ]; then sha="$c"; break; fi
+          sha=""; for c in $(gh api "repos/termenbox/termenbox-source/commits?sha=develop&per_page=30" --jq '.[].sha'); do
+          n="$(GH_TOKEN="$STATUS_TOKEN" gh api "repos/termenbox/termenbox-source/commits/$c/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
+          if [ "${n:-0}" -gt 0 ]; then sha="$c"; break; fi
           done
-          fi
           [ -n "$sha" ] || { echo "::notice::no green CI run on develop; nothing to release"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0; }
           git merge-base --is-ancestor "$sha" origin/develop || { echo "::notice::$sha is not on develop; nothing to release"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0; }
           publish=true

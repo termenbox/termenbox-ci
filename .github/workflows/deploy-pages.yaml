@@ -1,4 +1,3 @@
-# Generated from the Termenbox source. Do not edit here.
 name: Deploy to Cloudflare Pages
 
 # One deployment per release channel: a stable tag deploys app.termenbox.dev, a beta tag

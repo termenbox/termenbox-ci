@@ -1,7 +1,6 @@
-# Generated from the Termenbox source. Do not edit here.
 name: Release freeze
 
-# Publishes a signed freeze for one channel (decisions 0063 and 0133): the channel's current manifest with "freeze": true
+# Publishes a signed freeze for one channel: the channel's current manifest with "freeze": true
 # and a newer version, signed by that channel's release key in its GitHub Environment. Every updater and installer that
 # follows the channel then stops. The freeze is lifted by releasing a version newer than the freeze; the release
 # workflows refuse an older one while it holds (check_not_frozen.sh). The steps to run it are in SECURITY.md.

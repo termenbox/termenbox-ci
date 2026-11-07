@@ -1,4 +1,3 @@
-# Generated from the Termenbox source. Do not edit here.
 name: Pin Freshness
 
 # The bundled tmux is built from pinned sources, so security releases reach users only when a pin moves.

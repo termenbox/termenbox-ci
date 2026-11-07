@@ -1,6 +1,5 @@
-# Generated from the Termenbox source. Do not edit here.
 name: Build Base Image
-run-name: "Build Base Image · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ github.event.client_payload.sha && format(' · {0}', github.event.client_payload.sha) || '' }}"
+run-name: "Build Base Image · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ (github.event.client_payload.sha || inputs.sha) && format(' · {0}', (github.event.client_payload.sha || inputs.sha)) || '' }}"
 
 # The runtime base (node, tmux, git, ...) changes rarely. Rebuilding it weekly picks up OS security fixes;
 # app builds then start FROM it and skip all package installs.
@@ -10,6 +9,12 @@ on:
   schedule:
     - cron: '17 3 * * 1'
   workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Source commit to run on (a test of this workflow from a ci-repo branch); empty means the head of develop'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -37,7 +42,7 @@ jobs:
           GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
           EVENT: ${{ github.event.client_payload.event || 'other' }}
           BASE: ${{ github.event.client_payload.base }}
-          SHA: ${{ github.event.client_payload.sha }}
+          SHA: ${{ (github.event.client_payload.sha || inputs.sha) }}
         run: |
           yes() { echo run=true >> "$GITHUB_OUTPUT"; exit 0; }
           case "$EVENT" in tag|pull_request|comment) echo run=false >> "$GITHUB_OUTPUT"; exit 0 ;; esac
@@ -46,7 +51,7 @@ jobs:
           files=$(gh api "repos/termenbox/termenbox-source/compare/$BASE...$SHA" --jq '.files[].filename' 2>/dev/null) || yes
           for f in $files; do
             case "$f" in
-              docker/Dockerfile.base|.github/workflows/base-image.yaml) yes ;;
+              docker/Dockerfile.base) yes ;;
             esac
           done
           echo run=false >> "$GITHUB_OUTPUT"
@@ -63,7 +68,7 @@ jobs:
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
