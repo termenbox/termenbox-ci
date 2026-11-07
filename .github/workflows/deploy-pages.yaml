@@ -3,7 +3,8 @@ name: Deploy to Cloudflare Pages
 # One deployment per release channel: a stable tag deploys app.termenbox.dev, a beta tag
 # beta.app.termenbox.dev, a nightly nightly.app.termenbox.dev. A push to master or develop deploys nothing. Stable and
 # beta deploy inside the signing job of release-build.yaml, so one approval covers the release and its client; this
-# workflow is the nightly deploy and the manual one. Both run the composite action .github/actions/deploy-pages. The job runs in the GitHub Environment of its channel, so each channel has its
+# workflow is the nightly deploy and the manual one. The build runs in its own job (.github/actions/build-client) that
+# holds no deploy credential; the deploy job (.github/actions/deploy-pages) takes the built client from an artifact. Each runs in the GitHub Environment of its channel, so each channel has its
 # own GitHub OAuth app (TERMENBOX_GITHUB_CLIENT_ID / _SECRET); the D1 database, signing key and salt are repository-level
 # and shared. Stable deploys only on a stable tag, so migrations must stay additive: beta and nightly apply them first.
 # Run by hand it builds and deploys the chosen channel from the ref it is run on.
@@ -53,8 +54,61 @@ env:
   CHANNEL: ${{ inputs.channel }}
 
 jobs:
+  # Builds the client from the commit in a job that holds no deploy credential: it reads the public client id and the source
+  # token. The Cloudflare token, the function secrets and the certificate key are in the deploy job. A deploy of a staged
+  # bundle (tag) builds nothing.
+  build:
+    name: Build ${{ inputs.channel }} client
+    if: inputs.tag == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.channel }}
+    permissions:
+      contents: read
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
+        with:
+          sha: ${{ github.event.client_payload.sha }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
+
+      - uses: ./.github/actions/build-client
+        with:
+          channel: ${{ inputs.channel }}
+          version: ${{ inputs.version }}
+          github-client-id: ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+          client-origin: ${{ vars.TERMENBOX_CLIENT_ORIGIN }}
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: client-dist
+          path: packages/client/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@main
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: build-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+
   deploy:
     name: Deploy ${{ inputs.channel }} to Cloudflare Pages
+    needs: [build]
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ inputs.channel }}
@@ -74,6 +128,13 @@ jobs:
           token: ${{ secrets.SOURCE_TOKEN }}
           remote: true
 
+      - name: Fetch the built client
+        if: inputs.tag == ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: client-dist
+          path: packages/client/dist
+
       # A staged bundle is deployed as it is, after its owner signature verifies (the action checks it).
       - name: Fetch the staged bundle
         if: inputs.tag != ''
@@ -92,10 +153,8 @@ jobs:
           prebuilt: ${{ inputs.tag != '' }}
           tag: ${{ inputs.tag }}
           channel: ${{ inputs.channel }}
-          version: ${{ inputs.version }}
           pages-project-name: ${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}
           d1-database-id: ${{ vars.TERMENBOX_D1_DATABASE_ID }}
-          client-origin: ${{ vars.TERMENBOX_CLIENT_ORIGIN }}
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           github-client-id: ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}

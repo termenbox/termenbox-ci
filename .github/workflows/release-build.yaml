@@ -610,9 +610,65 @@ jobs:
             ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
             ${{ secrets.SOURCE_TOKEN }}
 
+  # The client is built in a job that holds no deploy credential: it reads the public client id and the source token, and
+  # hands packages/client/dist to the deploy job as an artifact. The job that holds the Cloudflare token, the function
+  # secrets and the certificate key installs only from the lockfile, without install scripts.
+  build-client:
+    name: Build the client
+    needs: [publish]
+    if: ${{ inputs.publish && inputs.deploy }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.channel }}
+    permissions:
+      contents: read
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      VERSION: ${{ inputs.version }}
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
+        with:
+          sha: ${{ github.event.client_payload.sha }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
+
+      - name: Build the client
+        uses: ./.github/actions/build-client
+        with:
+          channel: ${{ inputs.channel }}
+          version: ${{ inputs.version }}
+          github-client-id: ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+          client-origin: ${{ vars.TERMENBOX_CLIENT_ORIGIN }}
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: client-dist
+          path: packages/client/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@main
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: build-client-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+
   deploy:
     name: Deploy the client
-    needs: [publish]
+    needs: [build-client, publish]
     if: ${{ inputs.publish && inputs.deploy }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -642,6 +698,11 @@ jobs:
           token: ${{ secrets.SOURCE_TOKEN }}
           remote: true
 
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: client-dist
+          path: packages/client/dist
+
       - name: Deploy the client
         uses: ./.github/actions/deploy-pages
         with:
@@ -651,7 +712,6 @@ jobs:
           release-repo: termenbox/termenbox
           pages-project-name: ${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}
           d1-database-id: ${{ vars.TERMENBOX_D1_DATABASE_ID }}
-          client-origin: ${{ vars.TERMENBOX_CLIENT_ORIGIN }}
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           github-client-id: ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
