@@ -55,6 +55,7 @@ jobs:
       publish: ${{ steps.s.outputs.publish }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@ab07a5a936daa8de666f8c0c62c3adf69ce964fc
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
         with:
@@ -96,11 +97,11 @@ jobs:
               [ "$n" -le 99 ] || { echo "::error::99 nightlies today; refusing another"; exit 1; }
             done
           fi
-          plan="$(python3 .github/scripts/release_plan.py nightly "$core" "$day" "$n")"
+          plan="$(python3 "$TB_RELEASE_TOOLS/release_plan.py" nightly "$core" "$day" "$n")"
           tag="$(jq -r .tag <<<"$plan")"
 
           # A signed freeze (release-freeze.yaml) holds the channel until a release newer than it is made.
-          if [ "$publish" = true ] && ! GH_TOKEN="$CI_TOKEN" GH_REPO="$CI_REPO" sh .github/scripts/check_not_frozen.sh nightly "$(jq -r .version <<<"$plan")"; then
+          if [ "$publish" = true ] && ! GH_TOKEN="$CI_TOKEN" GH_REPO="$CI_REPO" sh "$TB_RELEASE_TOOLS/check_not_frozen.sh" nightly "$(jq -r .version <<<"$plan")"; then
             echo "::notice::nightly is frozen; nothing to release"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
           if [ "$publish" = true ]; then
@@ -201,6 +202,7 @@ jobs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@ab07a5a936daa8de666f8c0c62c3adf69ce964fc
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
         with:
@@ -211,7 +213,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
           GH_REPO: termenbox/termenbox
-        run: sh .github/scripts/prune_nightlies.sh 14
+        run: sh "$TB_RELEASE_TOOLS/prune_nightlies.sh" 14
 
       - if: always()
         id: finish

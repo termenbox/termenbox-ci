@@ -62,6 +62,7 @@ jobs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@ab07a5a936daa8de666f8c0c62c3adf69ce964fc
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
         with:
@@ -83,7 +84,7 @@ jobs:
       - name: Write the manifest again with a later issue time
         if: steps.current.outputs.skip != 'true'
         run: |
-          python3 .github/scripts/resign_manifest.py dist/manifest.json dist/resigned.json "$CHANNEL"
+          python3 "$TB_RELEASE_TOOLS/resign_manifest.py" dist/manifest.json dist/resigned.json "$CHANNEL"
           mv dist/resigned.json dist/manifest.json
 
       - name: Sign it
@@ -104,7 +105,7 @@ jobs:
             echo "$kid $(cut -d' ' -f1,2 "$RUNNER_TEMP/release_key.pub") channel=$CHANNEL" > "$RUNNER_TEMP/release-keys.txt"
             keys="$RUNNER_TEMP/release-keys.txt"
           fi
-          sh .github/scripts/sign_manifest.sh "$RUNNER_TEMP/release_key" "$keys" "$kid" "$CHANNEL" dist/manifest.json
+          sh "$TB_RELEASE_TOOLS/sign_manifest.sh" "$RUNNER_TEMP/release_key" "$keys" "$kid" "$CHANNEL" dist/manifest.json
           rm -f "$RUNNER_TEMP/release_key"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -126,11 +127,11 @@ jobs:
           R2_BUCKET: ${{ vars.R2_RELEASE_BUCKET }}
         run: |
           version="$(jq -r .version dist/manifest.json)"
-          sh .github/scripts/publish_r2.sh --resign dist "$CHANNEL" "$version"
+          sh "$TB_RELEASE_TOOLS/publish_r2.sh" --resign dist "$CHANNEL" "$version"
 
       - name: Publish to the mirror
         if: steps.current.outputs.skip != 'true' && env.PUBLISH == 'true'
-        run: sh .github/scripts/update_alias.sh --resign "channel-$CHANNEL" dist/manifest.json dist/manifest.json.sig
+        run: sh "$TB_RELEASE_TOOLS/update_alias.sh" --resign "channel-$CHANNEL" dist/manifest.json dist/manifest.json.sig
 
       - if: always()
         id: finish
