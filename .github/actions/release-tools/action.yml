@@ -1,0 +1,12 @@
+name: release-tools
+description: Makes the release scripts of this repository (release/) available to the job as $TB_RELEASE_TOOLS, a read-only copy, so a job that holds a secret runs reviewed code of this repository and never a script of the source it builds.
+runs:
+  using: composite
+  steps:
+    - shell: sh
+      run: |
+        dest="$RUNNER_TEMP/release-tools"
+        rm -rf "$dest"
+        cp -R "$GITHUB_ACTION_PATH/../../../release" "$dest"
+        chmod -R a-w "$dest"
+        echo "TB_RELEASE_TOOLS=$dest" >> "$GITHUB_ENV"

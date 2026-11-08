@@ -25,3 +25,7 @@ jobs:
         run: node scripts/check-public-comments.mjs
       - name: Tests of the checks and of the Worker triggers
         run: node --test scripts/check-action-refs.test.mjs scripts/check-gate-token.test.mjs worker/triggers.test.mjs
+      - name: Tests of the release scripts
+        run: |
+          for t in release/test-*.sh; do echo "$t"; sh "$t" > /dev/null; done
+          python3 -B -m unittest discover -s release -p 'test_*.py'
