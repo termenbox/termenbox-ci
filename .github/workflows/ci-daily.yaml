@@ -1,8 +1,8 @@
 name: CI daily
 run-name: "CI daily · the head of develop"
 
-# A push to develop runs a smoke set and a pull request runs Chromium (WebKit when the client changed), see ci.yaml and
-# decision 0221. Everything else (Firefox, the full WebKit matrix, both static binaries, the installers) runs here once
+# A push to develop runs a smoke set and a pull request runs Chromium (WebKit when the client changed), see ci.yaml.
+# Everything else (Firefox, the full WebKit matrix, both static binaries, the installers) runs here once
 # a day on the head of develop. A red run is fixed like a red push: the failing job posts its scrubbed log to the
 # rolling failure issue, and this run writes no commit status. The run also refreshes the static-binary caches, which
 # a push no longer writes.

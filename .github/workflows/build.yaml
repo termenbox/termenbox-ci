@@ -50,7 +50,7 @@ jobs:
         run: |
           openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:LOG_KEY -in build.log -out build.log.enc 2>/dev/null || true
           rm -f build.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: build-log-encrypted
