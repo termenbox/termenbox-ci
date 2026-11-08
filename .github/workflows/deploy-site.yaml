@@ -87,7 +87,7 @@ jobs:
         run: node scripts/build-site.mjs
 
       - name: Install Wrangler
-        run: npm install -g wrangler
+        run: npm install -g --ignore-scripts wrangler@4.158.0
 
       # A preview goes to its own branch alias (https://course-<alias>.<project>.pages.dev), never production, so a branch can be
       # looked at on a phone before a release. Production deploys only from master.
