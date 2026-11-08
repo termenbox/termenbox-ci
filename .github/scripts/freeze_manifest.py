@@ -23,7 +23,7 @@ CHANNELS = ("stable", "beta", "nightly")
 def freeze(current, version, channel, notes=""):
     if channel not in CHANNELS:
         sys.exit(f"channel must be one of {', '.join(CHANNELS)}, got {channel!r}")
-    # The beta alias can hold a stable release (decision 0132), which a beta freeze then replaces under the beta key.
+    # The beta alias can hold a stable release, which a beta freeze then replaces under the beta key.
     held = current.get("channel", "stable")
     if held != channel and not (channel == "beta" and held == "stable"):
         sys.exit(f"the current manifest is a {held} manifest, not a {channel} one")

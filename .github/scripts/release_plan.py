@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What a release tag means (R68, decisions 0130 and 0132). One place decides the channel, the version, the image tags
+"""What a release tag means. One place decides the channel, the version, the image tags
 and the alias releases, because GitHub tag globs are not regexes: `v[0-9]*.[0-9]*.[0-9]*` also matches `v0.2.0-rc.1`.
 
 usage: release_plan.py tag TAG                    classify a pushed tag; prints JSON, channel `none` for any other tag

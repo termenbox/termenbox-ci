@@ -24,4 +24,4 @@ jobs:
       - name: Comments name nothing internal
         run: node scripts/check-public-comments.mjs
       - name: Tests of the checks and of the Worker triggers
-        run: node --test scripts/check-action-refs.test.mjs scripts/check-gate-token.test.mjs worker/triggers.test.mjs
+        run: node --test scripts/check-action-refs.test.mjs scripts/check-gate-token.test.mjs scripts/check-public-comments.test.mjs worker/triggers.test.mjs

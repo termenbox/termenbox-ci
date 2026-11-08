@@ -1,5 +1,5 @@
 #!/bin/sh
-# Publishes a signed release to the project's R2 bucket (decision 0212): every file under <channel>/<version>/, then the
+# Publishes a signed release to the project's R2 bucket: every file under <channel>/<version>/, then the
 # channel's moving pointer <channel>/manifest.json[.sig], which only moves forward.
 #   publish_r2.sh [--freeze] DIST CHANNEL VERSION ALIASES
 # DIST holds the binaries, tmux and its notices, LICENSE, NOTICES, SHA256SUMS, manifest.json and manifest.json.sig.
@@ -18,6 +18,12 @@
 # it and writes only a newer version, and a freeze then reads its channel's pointer back and fails unless it holds the
 # freeze. What is left is a window of a few seconds between a release's read and its write; the freeze run turns red when
 # it loses, and running it again repeats it.
+# --resign (publish_r2.sh --resign DIST CHANNEL VERSION) writes the same release's manifest again with a later "issued_at"
+# (resign_manifest.py), so a quiet channel stays inside the 90-day window the installer and the updater accept. It touches
+# only the channel's own pointer, signature first, and only when the pointer still holds this version with this manifest
+# apart from the issue time and a later one is offered: it cannot move a version, lift a freeze or write an older state.
+# It then reads the pointer back and fails unless it holds the new manifest.
+#
 # --freeze moves only the pointers, with the signed freeze manifest in DIST (manifest.json and manifest.json.sig, nothing
 # else is uploaded or pruned). The channel's own pointer must end up holding that manifest, or the script fails: a freeze
 # that did not take effect must not look like a success. Aliases (a stable freeze also covers channel-beta) stay forward-only.
@@ -25,11 +31,12 @@
 # channel's pointer holds and the previous 2 (4 for nightly) stay, nothing else under the bucket is touched, and it is
 # skipped when any step above failed. The mirror Releases keep everything.
 # Needs the AWS CLI and, in the environment, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, R2_ACCOUNT_ID and R2_BUCKET.
-# The caller runs the security review gate for stable and beta before this script (guardrail
-# a-release-needs-its-security-review-closed); this script does not decide whether a release may happen.
+# The caller runs the security review gate for stable and beta before this script;
+# this script does not decide whether a release may happen.
 set -eu
-freeze=false
+freeze=false; resign=false
 if [ "${1:-}" = --freeze ]; then freeze=true; shift; fi
+if [ "${1:-}" = --resign ]; then resign=true; shift; fi
 dist="$1"; channel="$2"; version="$3"; aliases="${4:-}"
 here="$(dirname "$0")"
 case "$channel" in stable|beta|nightly) ;; *) echo "unknown channel $channel"; exit 1 ;; esac
@@ -60,7 +67,34 @@ for p in $pointers; do
   esac
 done
 
+if [ "$resign" = true ]; then
+  [ -z "$aliases" ] || { echo "a re-sign writes the channel's own pointer only"; exit 1; }
+  for f in manifest.json manifest.json.sig; do [ -f "$dist/$f" ] || { echo "missing $dist/$f"; exit 1; }; done
+fi
+
 absent() { case "$1" in *"(404)"*|*NoSuchKey*|*"Not Found"*) return 0 ;; *) return 1 ;; esac; }
+
+if [ "$resign" = true ]; then
+  key="$channel/manifest.json"
+  s3 s3 cp "s3://$R2_BUCKET/$key" "$tmp/current.json" --only-show-errors || { echo "cannot read $key, so nothing is signed again"; exit 1; }
+  [ "$(jq -r .version "$tmp/current.json")" = "$version" ] || { echo "$key holds $(jq -r .version "$tmp/current.json"), not $version: a re-sign never moves a version"; exit 1; }
+  [ "$(jq -S 'del(.issued_at)' "$tmp/current.json")" = "$(jq -S 'del(.issued_at)' "$dist/manifest.json")" ] \
+    || { echo "the manifest to write differs from $key in more than its issue time"; exit 1; }
+  jq -e --slurpfile n "$dist/manifest.json" '(.issued_at // 0) < ($n[0].issued_at // 0)' "$tmp/current.json" >/dev/null \
+    || { echo "the manifest to write is not issued later than $key"; exit 1; }
+  # The pointer is read again right before anything is written: a freeze or a release that wrote since the first read is
+  # not replaced by this older state, and its signature is not overwritten. What is left is the few milliseconds between
+  # this read and the writes; the read-back below turns a loss there into a red run.
+  s3 s3 cp "s3://$R2_BUCKET/$key" "$tmp/again.json" --only-show-errors || { echo "cannot read $key again, so nothing is signed again"; exit 1; }
+  cmp -s "$tmp/again.json" "$tmp/current.json" || { echo "$key changed while it was being signed again: run it again"; exit 1; }
+  s3 s3 cp "$dist/manifest.json.sig" "s3://$R2_BUCKET/$key.sig" --only-show-errors --content-type text/plain --cache-control "public,max-age=60"
+  s3 s3 cp "$dist/manifest.json" "s3://$R2_BUCKET/$key" --only-show-errors --content-type application/json --cache-control "public,max-age=60"
+  if ! s3 s3 cp "s3://$R2_BUCKET/$key" "$tmp/back.json" --only-show-errors || ! cmp -s "$tmp/back.json" "$dist/manifest.json" \
+    || ! s3 s3 cp "s3://$R2_BUCKET/$key.sig" "$tmp/back.sig" --only-show-errors || ! cmp -s "$tmp/back.sig" "$dist/manifest.json.sig"; then
+    echo "$key does not hold the re-signed manifest and its signature after they were written (something else moved the pointer): run it again"; exit 1
+  fi
+  echo "$key: $version signed again"; exit 0
+fi
 
 prefix="$channel/$version"
 published=false

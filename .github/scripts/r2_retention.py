@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Which version prefixes of one channel in R2 to delete (decision 0212, free tier: 10 GB).
+"""Which version prefixes of one channel in R2 to delete (free tier: 10 GB).
 
 usage: r2_retention.py CURRENT KEEP_PREVIOUS < names
 
