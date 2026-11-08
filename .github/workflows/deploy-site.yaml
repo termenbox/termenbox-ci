@@ -76,7 +76,7 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: '20'
+          node-version: '24'
 
       # The page is static; this keeps it from shipping with a missing asset, a title past its length or a command that
       # differs from the README's.
