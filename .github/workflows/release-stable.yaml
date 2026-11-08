@@ -45,6 +45,7 @@ jobs:
       publish: ${{ steps.g.outputs.publish }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@ab07a5a936daa8de666f8c0c62c3adf69ce964fc
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
         with:
@@ -66,7 +67,7 @@ jobs:
           else
             tag="v$DISPATCH_VERSION"; publish=false
           fi
-          plan="$(python3 .github/scripts/release_plan.py tag "$tag")"
+          plan="$(python3 "$TB_RELEASE_TOOLS/release_plan.py" tag "$tag")"
           channel="$(jq -r .channel <<<"$plan")"
           if [ "$channel" != stable ]; then
             echo "::notice::$tag is not a stable tag; nothing to do"
@@ -111,7 +112,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: termenbox/termenbox
           VERSION: ${{ steps.g.outputs.version }}
-        run: sh .github/scripts/check_not_frozen.sh stable "$VERSION"
+        run: sh "$TB_RELEASE_TOOLS/check_not_frozen.sh" stable "$VERSION"
 
       - if: always()
         id: finish

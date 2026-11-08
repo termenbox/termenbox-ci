@@ -452,23 +452,11 @@ jobs:
           # The container updater's test uses the runner's Docker and a local registry.
           TERMENBOX_E2E_DOCKER: "1"
 
-      - name: Test the release manifest script
+      # The tests of the release scripts that moved to release/ run in this repository's repo-checks.
+      - name: Test the bundle check, the deploy ref check and the pin check
         run: |
-          python3 .github/scripts/test_make_manifest.py
-          cd .github/scripts && python3 test_image_digests.py
-          python3 test_r2_retention.py
-
-      - name: Test the release tag rules, the alias update and the nightly pruning
-        run: |
-          python3 .github/scripts/test_release_plan.py
-          python3 .github/scripts/test_freeze_manifest.py
-          sh .github/scripts/test-sign-manifest.sh
-          sh .github/scripts/test-check-not-frozen.sh
           sh .github/scripts/test-verify-bundle.sh
           sh .github/scripts/test-check-deploy-ref.sh
-          sh .github/scripts/test-prune-nightlies.sh
-          sh .github/scripts/test-update-alias.sh
-          sh .github/scripts/test-publish-r2.sh
           sh .github/scripts/test-check-pins.sh
           sh .github/scripts/test-ci-scope.sh
 

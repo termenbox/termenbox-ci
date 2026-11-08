@@ -66,6 +66,7 @@ jobs:
       channel: ${{ steps.p.outputs.channel }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@ab07a5a936daa8de666f8c0c62c3adf69ce964fc
 
       # The whole history: the security review gate below asks whether the commit is on master.
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
@@ -88,7 +89,7 @@ jobs:
             # called by release-nightly.yaml, whose own event name this workflow sees
             tags="$CALL_TAGS"; version="$CALL_VERSION"
           elif [ "$TB_EVENT" = tag ]; then
-            plan="$(python3 .github/scripts/release_plan.py tag "$TB_TAG")"
+            plan="$(python3 "$TB_RELEASE_TOOLS/release_plan.py" tag "$TB_TAG")"
             if [ "$(jq -r .channel <<<"$plan")" = none ]; then
               echo "::notice::$TB_TAG is not a stable or beta tag; no image"; run=false
             fi
