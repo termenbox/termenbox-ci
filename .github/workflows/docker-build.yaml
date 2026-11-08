@@ -53,6 +53,9 @@ jobs:
   plan:
     name: Plan the image tags
     runs-on: ubuntu-latest
+    # A stable or beta tag push reads the review repo with REVIEWS_TOKEN, a secret of that channel's Environment (a tag with a
+    # hyphen is a beta). Any other event has no Environment, holds no token and so passes no gate.
+    environment: ${{ (github.event.client_payload.event == 'tag' && contains(github.event.client_payload.tag, '-') && 'beta') || (github.event.client_payload.event == 'tag' && 'stable') || '' }}
     timeout-minutes: 5
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
@@ -124,6 +127,7 @@ jobs:
         if: steps.p.outputs.run == 'true' && (github.event.client_payload.event || github.event_name) != 'pull_request' && inputs.tags == ''
         env:
           SHA: ${{ steps.p.outputs.sha }}
+          GH_TOKEN: ${{ secrets.REVIEWS_TOKEN }}
         run: |
           # Rule 1: the gate runs from master's copy of its script and the scripts it runs, not from the commit's checkout.
           set -eu
@@ -147,6 +151,7 @@ jobs:
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REVIEWS_TOKEN }}
 
   # One native runner per architecture: no QEMU, so the Rust build runs at full speed. Build cache lives in GHCR, one per channel and architecture (a channel never reads a cache another one writes)
   # (the Actions cache has a 10 GB per-repository cap that two architectures' layers were filling).

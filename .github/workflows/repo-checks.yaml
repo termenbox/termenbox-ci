@@ -19,7 +19,9 @@ jobs:
           node-version: 24
       - name: Every action reference is a full commit
         run: node scripts/check-action-refs.mjs
+      - name: The release gates carry their token
+        run: node scripts/check-gate-token.mjs
       - name: Comments name nothing internal
         run: node scripts/check-public-comments.mjs
       - name: Tests of the checks and of the Worker triggers
-        run: node --test scripts/check-action-refs.test.mjs worker/triggers.test.mjs
+        run: node --test scripts/check-action-refs.test.mjs scripts/check-gate-token.test.mjs worker/triggers.test.mjs

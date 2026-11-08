@@ -30,6 +30,8 @@ jobs:
   gate:
     name: Gate
     runs-on: ubuntu-latest
+    # The gate reads the review repo with REVIEWS_TOKEN, a secret of this Environment, so a dry run waits for the reviewer too.
+    environment: beta
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
       run: ${{ steps.g.outputs.run }}
@@ -79,6 +81,8 @@ jobs:
       # It also runs on a dry run, so a stale or open review shows up before a real tag does.
       - name: Security review gate
         if: steps.g.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.REVIEWS_TOKEN }}
         run: |
           # Rule 1: the gate runs from master's copy of its script and the scripts it runs, not from the release
           # commit's checkout. A script not yet on master stops the release.
@@ -113,6 +117,7 @@ jobs:
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REVIEWS_TOKEN }}
 
   release:
     name: Release
