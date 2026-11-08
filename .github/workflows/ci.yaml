@@ -1051,6 +1051,7 @@ jobs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@71200b2000ffe8807487d96c534b0dd921fe795b
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
         with:
@@ -1069,7 +1070,7 @@ jobs:
           # The socket is mounted outside /var/run, which the machine's systemd replaces with a tmpfs.
           docker run -d --name machine --privileged --cgroupns=host --network host -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
             -v /var/run/docker.sock:/docker.sock -v "$(readlink -f "$(which docker)")":/usr/local/bin/docker:ro \
-            -v "$RUNNER_TEMP/work:$RUNNER_TEMP/work" -v "$PWD/.github/scripts:/scripts:ro" \
+            -v "$RUNNER_TEMP/work:$RUNNER_TEMP/work" -v "$PWD/.github/scripts:/scripts:ro" -v "$TB_RELEASE_TOOLS:/release-tools:ro" \
             -v "$PWD/packages/client/installer/install.sh:/install.sh:ro" -v "$PWD/packages/client/public/uninstall.sh:/uninstall.sh:ro" \
             -v "$PWD/release/termenbox-server:/server:ro" jrei/systemd-debian:12
           sleep 8
