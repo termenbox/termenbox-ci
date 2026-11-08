@@ -1,0 +1,150 @@
+name: Release re-sign
+
+# The installer and the updater refuse a signed manifest issued more than 90 days ago. A channel that gets no release for
+# a while would then stop installing, so this signs the channel's current manifest again, unchanged except for a later
+# "issued_at", with the channel's own online key. Beta and nightly only: the stable key is offline, and the owner signs
+# stable again by hand at least every 60 days (the monthly sweep's manifest-age check warns when 30 days remain).
+# It writes the channel's R2 pointer (publish_r2.sh --resign) and then the mirror alias (update_alias.sh --resign); both
+# refuse to move a version, lift a freeze or write an issue time that is not later. A manifest issued less than
+# min_age_days ago is left alone, so a channel that releases often is not signed again for nothing.
+# publish=false does everything but publish, with a throwaway key.
+
+on:
+  schedule:
+    - cron: '17 3 1 * *'
+  workflow_dispatch:
+    inputs:
+      min_age_days:
+        description: 'Sign again only a manifest issued at least this many days ago'
+        type: string
+        default: '20'
+      publish:
+        description: 'Publish the re-signed manifests (otherwise a dry run that publishes nothing)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: quiet {0}
+
+env:
+  TB_EVENT: ${{ github.event.client_payload.event || github.event_name }}
+  TB_TAG: ${{ github.event.client_payload.tag }}
+
+jobs:
+  resign:
+    name: Re-sign ${{ matrix.channel }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [beta, nightly]
+    # The same group as the releases that write this pointer (r2-pointers-beta, r2-pointers-nightly), so a re-sign never
+    # overlaps a release; publish_r2.sh still refuses to replace a pointer that moved to another version.
+    concurrency:
+      group: r2-pointers-${{ matrix.channel }}
+      cancel-in-progress: false
+    # The channel's signing key is the secret RELEASE_SIGNING_KEY of this environment.
+    environment: ${{ matrix.channel }}
+    permissions:
+      contents: write
+    env:
+      CHANNEL: ${{ matrix.channel }}
+      MIN_AGE_DAYS: ${{ inputs.min_age_days || '20' }}
+      PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
+      GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+      GH_REPO: termenbox/termenbox
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        with:
+          sha: ${{ github.event.client_payload.sha }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+
+      - name: Read the manifest the channel's R2 pointer holds now
+        id: current
+        run: |
+          mkdir -p dist
+          curl -fsS --retry 3 -o dist/manifest.json "https://dl.termenbox.dev/$CHANNEL/manifest.json"
+          jq -r '"holds \(.version) (\(.channel), freeze=\(.freeze), issued_at=\(.issued_at // "none"))"' dist/manifest.json
+          issued="$(jq -r '.issued_at // 0' dist/manifest.json)"
+          if [ "$issued" -gt 0 ] && [ "$issued" -ge $(( $(date +%s) - MIN_AGE_DAYS * 86400 )) ]; then
+            echo "issued less than $MIN_AGE_DAYS days ago: nothing to sign again"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write the manifest again with a later issue time
+        if: steps.current.outputs.skip != 'true'
+        run: |
+          python3 .github/scripts/resign_manifest.py dist/manifest.json dist/resigned.json "$CHANNEL"
+          mv dist/resigned.json dist/manifest.json
+
+      - name: Sign it
+        if: steps.current.outputs.skip != 'true'
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          umask 077
+          case "$CHANNEL" in beta) kid=b1 ;; nightly) kid=n1 ;; esac
+          if [ -n "$RELEASE_SIGNING_KEY" ] && [ "$PUBLISH" = true ]; then
+            printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release_key"
+            keys=packages/server/release-keys.txt
+          elif [ "$PUBLISH" = true ]; then
+            echo "RELEASE_SIGNING_KEY is not set in the $CHANNEL environment: refusing to publish an unsigned manifest"; exit 1
+          else
+            echo "::warning::dry run: signing with a throwaway key"
+            ssh-keygen -q -t ed25519 -N '' -C throwaway -f "$RUNNER_TEMP/release_key"
+            echo "$kid $(cut -d' ' -f1,2 "$RUNNER_TEMP/release_key.pub") channel=$CHANNEL" > "$RUNNER_TEMP/release-keys.txt"
+            keys="$RUNNER_TEMP/release-keys.txt"
+          fi
+          sh .github/scripts/sign_manifest.sh "$RUNNER_TEMP/release_key" "$keys" "$kid" "$CHANNEL" dist/manifest.json
+          rm -f "$RUNNER_TEMP/release_key"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.current.outputs.skip != 'true'
+        with:
+          name: release-resign-${{ matrix.channel }}
+          path: |
+            dist/manifest.json
+            dist/manifest.json.sig
+          retention-days: 7
+
+      # R2 first: what installers and updaters read. The script fails unless the pointer holds the new manifest after.
+      - name: Publish to R2
+        if: steps.current.outputs.skip != 'true' && env.PUBLISH == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ vars.R2_RELEASE_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.R2_RELEASE_BUCKET }}
+        run: |
+          version="$(jq -r .version dist/manifest.json)"
+          sh .github/scripts/publish_r2.sh --resign dist "$CHANNEL" "$version"
+
+      - name: Publish to the mirror
+        if: steps.current.outputs.skip != 'true' && env.PUBLISH == 'true'
+        run: sh .github/scripts/update_alias.sh --resign "channel-$CHANNEL" dist/manifest.json dist/manifest.json.sig
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: resign-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.MIRROR_TOKEN }}
+            ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
+            ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
+            ${{ secrets.RELEASE_SIGNING_KEY }}
+            ${{ secrets.SOURCE_TOKEN }}
