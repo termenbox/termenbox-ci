@@ -73,7 +73,7 @@ jobs:
           done
 
       - name: Install Wrangler
-        run: npm install -g wrangler
+        run: npm install -g --ignore-scripts wrangler@4.158.0
 
       - name: Publish the preview
         env:
