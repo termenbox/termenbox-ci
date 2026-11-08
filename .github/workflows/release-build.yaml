@@ -468,18 +468,30 @@ jobs:
           if TERMENBOX_RELEASE_KEYS="$(cat "$TERMENBOX_RELEASE_KEYS_FILE")" dist/termenbox-server-x86_64-linux \
             --verify-release "$RUNNER_TEMP/changed.json" --release-sig dist/manifest.json.sig; then echo "a changed manifest was accepted"; exit 1; fi
 
-      # The licence texts ship next to the binaries, and SHA256SUMS lets a second host be compared byte for byte.
-      - name: Licence, notices and SHA256SUMS
+      # The installer of the release, with this channel's address, keys and version floor baked in (what /i serves), so a
+      # person can fetch it from the release of the product repo instead of from the hosting account. Stable and beta only.
+      - name: The installer of this release
         run: |
-          cp LICENSE NOTICES dist/
-          (cd dist && sha256sum termenbox-server-*-linux tmux-*-linux tmux-COPYING tmux-libevent-LICENSE tmux-ncurses-COPYING LICENSE NOTICES manifest.json manifest.json.sig > SHA256SUMS)
-          cat dist/SHA256SUMS
+          case "$CHANNEL" in
+            stable) origin=https://app.termenbox.dev ;;
+            beta) origin=https://beta.app.termenbox.dev ;;
+            *) exit 0 ;;
+          esac
+          CHANNEL="$CHANNEL" ORIGIN="$origin" node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            import { bakeInstaller } from "./packages/client/installer/bake.mjs";
+            const r = (p) => readFileSync(p, "utf8");
+            writeFileSync("dist/install.sh", bakeInstaller(r("packages/client/installer/install.sh"), process.env.ORIGIN, process.env.CHANNEL,
+              r("packages/server/release-keys.txt"), r("packages/client/bundle-keys.txt"), r("packages/client/bundle-min-version.txt")));
+          '
+          sh -n dist/install.sh
 
       # The licence texts ship next to the binaries, and SHA256SUMS lets a second host be compared byte for byte.
       - name: Licence, notices and SHA256SUMS
         run: |
           cp LICENSE NOTICES dist/
-          (cd dist && sha256sum termenbox-server-*-linux tmux-*-linux tmux-COPYING tmux-libevent-LICENSE tmux-ncurses-COPYING LICENSE NOTICES manifest.json manifest.json.sig > SHA256SUMS)
+          extra=""; [ ! -f dist/install.sh ] || extra="install.sh"
+          (cd dist && sha256sum termenbox-server-*-linux tmux-*-linux tmux-COPYING tmux-libevent-LICENSE tmux-ncurses-COPYING LICENSE NOTICES $extra manifest.json manifest.json.sig > SHA256SUMS)
           cat dist/SHA256SUMS
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -491,7 +503,9 @@ jobs:
             dist/SHA256SUMS
             dist/LICENSE
             dist/NOTICES
+            dist/install.sh
           retention-days: 7
+          if-no-files-found: warn
 
       - if: always()
         id: finish
@@ -582,6 +596,7 @@ jobs:
           files=(dist/termenbox-server-x86_64-linux dist/termenbox-server-aarch64-linux
             dist/tmux-x86_64-linux dist/tmux-aarch64-linux dist/tmux-COPYING dist/tmux-libevent-LICENSE dist/tmux-ncurses-COPYING
             dist/LICENSE dist/NOTICES dist/SHA256SUMS dist/manifest.json dist/manifest.json.sig)
+          [ ! -f dist/install.sh ] || files+=(dist/install.sh)
           if gh release view "$TAG" >/dev/null 2>&1; then
             # A run again after R2 succeeded and this step did not. The R2 step above has just found the published manifest
             # to be the one built here (it fails otherwise), so completing the same release adds nothing new. A manifest
