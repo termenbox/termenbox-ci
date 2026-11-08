@@ -135,7 +135,7 @@ jobs:
           gate="$RUNNER_TEMP/gate"
           mkdir -p "$gate"
           for f in check-security-review.mjs check-security-surface.mjs check-security-counts.mjs; do
-            git show "origin/master:scripts/$f" > "$gate/$f" || { echo "scripts/$f is not on origin/master: the release gate cannot run, so no image is pushed"; exit 1; }
+            git show "refs/remotes/origin/master:scripts/$f" > "$gate/$f" || { echo "scripts/$f is not on origin/master: the release gate cannot run, so no image is pushed"; exit 1; }
           done
           node "$gate/check-security-review.mjs" "$SHA"
 
