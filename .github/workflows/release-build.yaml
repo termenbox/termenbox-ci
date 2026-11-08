@@ -531,6 +531,17 @@ jobs:
           token: ${{ secrets.SOURCE_TOKEN }}
           remote: true
 
+      # The scripts that run beside this job's secrets are this repository's own, read at the commit of the workflow
+      # that is running, never from the source checkout (a source change cannot reach them without a PR here).
+      - name: Check out the release scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: termenbox/termenbox-ci
+          ref: ${{ github.sha }}
+          path: .ci
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: release-*
@@ -546,7 +557,7 @@ jobs:
           R2_ACCOUNT_ID: ${{ vars.R2_RELEASE_ACCOUNT_ID }}
           R2_BUCKET: ${{ vars.R2_RELEASE_BUCKET }}
           ALIASES: ${{ inputs.aliases }}
-        run: sh .github/scripts/publish_r2.sh dist "$CHANNEL" "$VERSION" "$ALIASES"
+        run: sh .ci/.github/scripts/publish_r2.sh dist "$CHANNEL" "$VERSION" "$ALIASES"
 
       # The mirror: the same files in a Release of the public product repo (MIRROR_TOKEN, GH_REPO below),
       # which the installer falls back to only for a manifest R2 cannot serve. The source commit is not in that repo,
@@ -591,7 +602,7 @@ jobs:
           ALIASES: ${{ inputs.aliases }}
         run: |
           for alias in $ALIASES; do
-            sh .github/scripts/update_alias.sh "$alias" dist/manifest.json dist/manifest.json.sig
+            sh .ci/.github/scripts/update_alias.sh "$alias" dist/manifest.json dist/manifest.json.sig
           done
 
       - if: always()
