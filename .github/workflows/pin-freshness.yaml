@@ -17,7 +17,7 @@ defaults:
 
 jobs:
   pins:
-    name: Check tmux, libevent and ncurses pins
+    name: Check tmux, libevent, ncurses and image pins
     runs-on: ubuntu-latest
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
@@ -34,17 +34,17 @@ jobs:
           GH_REPO: termenbox/termenbox-source
           GITHUB_TOKEN: ${{ secrets.STATUS_TOKEN }}
         run: |
-          behind="$(.github/scripts/check-pins.sh)"
+          behind="$({ .github/scripts/check-pins.sh; .github/scripts/check-pins.sh --images; })"
           if [ -z "$behind" ]; then echo "all pins are current"; exit 0; fi
           printf '%s\n' "$behind" | while IFS="$(printf '\t')" read -r name pinned latest url; do
-            title="build-tmux: $name $latest is out (pinned $pinned)"
+            title="pin-freshness: $name $latest is out (pinned $pinned)"
             # One issue per release, open or closed: a closed one means the maintainers decided already.
             if gh issue list --state all --limit 200 --json title --jq '.[].title' | grep -qxF "$title"; then
               echo "already filed: $title"; continue
             fi
             gh issue create --title "$title" --body "The weekly pin check (decision 0119) found a newer $name release.
 
-          - Pinned in \`.github/scripts/build-tmux.sh\`: $pinned
+          - Pinned in the source (\`.github/scripts/build-tmux.sh\` or \`docker/\`): $pinned
           - Latest upstream: $latest ($url)
 
           Read the release notes for security fixes, then move the version and sha256 pin together in a reviewed change. A pin bump is a patch release of termenbox."

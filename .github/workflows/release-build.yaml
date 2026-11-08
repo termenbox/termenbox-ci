@@ -225,10 +225,11 @@ jobs:
           VERSION: ${{ inputs.version }}
           TAG: ${{ inputs.tag }}
           CHANNEL: ${{ inputs.channel }}
+          SHA: ${{ inputs.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "$CHANNEL" = nightly ]; then flag=--build-jobs; what="Image / "; else flag=--build-run; what="Image $TAG"; fi
-          python3 .github/scripts/image_digests.py "ghcr.io/termenbox/termenbox:${VERSION}" image-digests.json --wait 4200 "$flag" "$what"
+          python3 .github/scripts/image_digests.py "ghcr.io/termenbox/termenbox:${VERSION}" image-digests.json --commit "$SHA" --wait 4200 "$flag" "$what"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-image
@@ -250,31 +251,22 @@ jobs:
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
 
+  # The manifest is written, signed, checked, published and deployed by five jobs so that no job runs code it does not
+  # need while it holds a credential:
+  #   manifest  source scripts, no Environment, no secret of a channel: writes the unsigned manifest
+  #   sign      the release signing key, ci-repo code only: no checkout of the source, no package install, no built binary
+  #   verify    no Environment: runs the built server binary against the signed manifest, writes SHA256SUMS
+  #   publish   R2 and mirror credentials: uploads what verify checked
+  #   deploy    Cloudflare credentials: the client of the channel
   manifest:
-    name: Manifest, signature and publish
+    name: Manifest
     needs: [build, image]
     # The image job is skipped for a dry run; anything else that skipped or failed must stop here.
     if: ${{ !cancelled() && needs.build.result == 'success' && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Pointer moves are one read and two writes with a forward-only check between them, so two releases that can move the
-    # same pointer must not overlap. A stable release moves the stable and the beta pointer, a beta release the beta one,
-    # a nightly its own: so anything that can write the beta pointer is in r2-pointers-beta, and nothing writes the stable
-    # pointer alone (hence no r2-pointers-stable); nightly is r2-pointers-nightly. A run behind another waits; a newer one
-    # replaces the one still waiting (GitHub keeps one pending run per group), so the newest release of the group wins and
-    # the displaced one is run again by hand. A freeze is NOT in these groups (release-freeze.yaml has its own per channel,
-    # so a release can never displace a waiting freeze); publish_r2.sh's forward-only check, which reads each pointer
-    # right before it writes it, is what keeps a release and a freeze that overlap from moving a pointer backwards.
-    concurrency:
-      group: r2-pointers-${{ inputs.channel == 'nightly' && 'nightly' || 'beta' }}
-      cancel-in-progress: false
-    # The signing key is the secret RELEASE_SIGNING_KEY of this environment, so a channel's key is only ever
-    # available to a run of that channel (the build jobs above never see it).
-    environment: ${{ inputs.channel }}
     permissions:
-      contents: write
-      deployments: write
-    # The inputs reach the scripts as variables, never pasted into the script text.
+      contents: read
     env:
       CHANNEL: ${{ inputs.channel }}
       KID: ${{ inputs.kid }}
@@ -315,6 +307,58 @@ jobs:
           assert sorted(m["tmux_notices"]) == ["tmux-COPYING", "tmux-libevent-LICENSE", "tmux-ncurses-COPYING"]
           PY
 
+      - name: Keep the key list that signs and verifies
+        run: |
+          mkdir -p keys
+          cp packages/server/release-keys.txt keys/release-keys.txt
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: unsigned-manifest
+          path: |
+            dist/manifest.json
+            keys/release-keys.txt
+          retention-days: 7
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@main
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: manifest-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+
+  sign:
+    name: Sign the manifest
+    needs: [manifest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The signing key is the secret RELEASE_SIGNING_KEY of this environment, so a channel's key is only ever
+    # available to a run of that channel. This job checks out nothing and runs nothing but the steps below.
+    environment: ${{ inputs.channel }}
+    permissions:
+      contents: read
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      KID: ${{ inputs.kid }}
+      VERSION: ${{ inputs.version }}
+      TAG: ${{ inputs.tag }}
+      PUBLISH: ${{ inputs.publish }}
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: unsigned-manifest
+          path: .
+
       - name: Sign the manifest
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
@@ -323,7 +367,7 @@ jobs:
           # A dry run never touches the real key, so it also works for a channel whose key is not set up yet.
           if [ -n "$RELEASE_SIGNING_KEY" ] && [ "$PUBLISH" = true ]; then
             printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release_key"
-            cp packages/server/release-keys.txt "$RUNNER_TEMP/release-keys.txt"
+            cp keys/release-keys.txt "$RUNNER_TEMP/release-keys.txt"
           elif [ "$PUBLISH" = true ]; then
             echo "RELEASE_SIGNING_KEY is not set in the $CHANNEL environment: refusing to publish an unsigned release"; exit 1
           else
@@ -339,10 +383,67 @@ jobs:
           grep -v '^#' "$RUNNER_TEMP/release-keys.txt" | awk -v kid="$KID" '$1 == kid && NF >= 3 { print "termenbox-release " $2 " " $3 }' > "$RUNNER_TEMP/allowed_signers"
           [ -s "$RUNNER_TEMP/allowed_signers" ] || { echo "release-keys.txt has no key $KID: add its public half (owner work, decision 0130)"; exit 1; }
           ssh-keygen -Y verify -f "$RUNNER_TEMP/allowed_signers" -I termenbox-release -n termenbox-release -s dist/manifest.json.sig < dist/manifest.json
-          echo "TERMENBOX_RELEASE_KEYS_FILE=$RUNNER_TEMP/release-keys.txt" >> "$GITHUB_ENV"
+          cp "$RUNNER_TEMP/release-keys.txt" keys/release-keys.txt
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: signed-manifest
+          path: |
+            dist/manifest.json
+            dist/manifest.json.sig
+            keys/release-keys.txt
+          retention-days: 7
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@main
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: sign-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.RELEASE_SIGNING_KEY }}
+
+  verify:
+    name: Verify, licence and SHA256SUMS
+    needs: [sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      KID: ${{ inputs.kid }}
+      VERSION: ${{ inputs.version }}
+      TAG: ${{ inputs.tag }}
+      PUBLISH: ${{ inputs.publish }}
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
+        with:
+          sha: ${{ github.event.client_payload.sha }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: signed-manifest
+          path: .
 
       - name: The server binary accepts what was just signed
         run: |
+          TERMENBOX_RELEASE_KEYS_FILE="$PWD/keys/release-keys.txt"
           chmod +x dist/termenbox-server-x86_64-linux
           # this binary was built with the release version, so it follows the channel being released
           TERMENBOX_RELEASE_KEYS="$(cat "$TERMENBOX_RELEASE_KEYS_FILE")" dist/termenbox-server-x86_64-linux \
@@ -361,6 +462,13 @@ jobs:
           (cd dist && sha256sum termenbox-server-*-linux tmux-*-linux tmux-COPYING tmux-libevent-LICENSE tmux-ncurses-COPYING LICENSE NOTICES manifest.json manifest.json.sig > SHA256SUMS)
           cat dist/SHA256SUMS
 
+      # The licence texts ship next to the binaries, and SHA256SUMS lets a second host be compared byte for byte.
+      - name: Licence, notices and SHA256SUMS
+        run: |
+          cp LICENSE NOTICES dist/
+          (cd dist && sha256sum termenbox-server-*-linux tmux-*-linux tmux-COPYING tmux-libevent-LICENSE tmux-ncurses-COPYING LICENSE NOTICES manifest.json manifest.json.sig > SHA256SUMS)
+          cat dist/SHA256SUMS
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-manifest
@@ -368,12 +476,70 @@ jobs:
             dist/manifest.json
             dist/manifest.json.sig
             dist/SHA256SUMS
+            dist/LICENSE
+            dist/NOTICES
           retention-days: 7
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@main
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: verify-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+
+  publish:
+    name: Publish
+    needs: [verify]
+    if: ${{ inputs.publish }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Pointer moves are one read and two writes with a forward-only check between them, so two releases that can move the
+    # same pointer must not overlap. A stable release moves the stable and the beta pointer, a beta release the beta one,
+    # a nightly its own: so anything that can write the beta pointer is in r2-pointers-beta, and nothing writes the stable
+    # pointer alone (hence no r2-pointers-stable); nightly is r2-pointers-nightly. A run behind another waits; a newer one
+    # replaces the one still waiting (GitHub keeps one pending run per group), so the newest release of the group wins and
+    # the displaced one is run again by hand. A freeze is NOT in these groups (release-freeze.yaml has its own per channel,
+    # so a release can never displace a waiting freeze); publish_r2.sh's forward-only check, which reads each pointer
+    # right before it writes it, is what keeps a release and a freeze that overlap from moving a pointer backwards.
+    concurrency:
+      group: r2-pointers-${{ inputs.channel == 'nightly' && 'nightly' || 'beta' }}
+      cancel-in-progress: false
+    environment: ${{ inputs.channel }}
+    permissions:
+      contents: write
+      deployments: write
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      KID: ${{ inputs.kid }}
+      VERSION: ${{ inputs.version }}
+      TAG: ${{ inputs.tag }}
+      PUBLISH: ${{ inputs.publish }}
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
+        with:
+          sha: ${{ github.event.client_payload.sha }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
 
       # The fast path: what the installer and the helper fetch. Versioned objects are immutable; the channel pointer
       # only moves forward (publish_r2.sh). The key is the secret of this channel's environment, scoped to the bucket.
       - name: Publish to R2
-        if: inputs.publish
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
@@ -386,7 +552,6 @@ jobs:
       # which the installer falls back to only for a manifest R2 cannot serve. The source commit is not in that repo,
       # so the release has no --target and the notes name the commit.
       - name: Publish
-        if: inputs.publish
         env:
           GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
           GH_REPO: termenbox/termenbox
@@ -419,7 +584,7 @@ jobs:
       # The rolling releases of the mirror only ever move forward (a stable release moves channel-beta when it is newer than the
       # last beta); they hold a copy of the manifest and nothing else, the assets stay under the tag above.
       - name: Move the aliases
-        if: inputs.publish && inputs.aliases != ''
+        if: inputs.aliases != ''
         env:
           GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
           GH_REPO: termenbox/termenbox
@@ -429,11 +594,116 @@ jobs:
             sh .github/scripts/update_alias.sh "$alias" dist/manifest.json dist/manifest.json.sig
           done
 
-      # Last, and only for a published release: the client of this channel, from the same commit, in the job that was
-      # approved for the release. A failure here leaves the release published and the run red. The
-      # pointer groups of this job (see concurrency above) serialise it with other releases that share a pointer.
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@main
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: publish-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.MIRROR_TOKEN }}
+            ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
+            ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
+            ${{ secrets.SOURCE_TOKEN }}
+
+  # The client is built in a job that holds no deploy credential: it reads the public client id and the source token, and
+  # hands packages/client/dist to the deploy job as an artifact. The job that holds the Cloudflare token, the function
+  # secrets and the certificate key installs only from the lockfile, without install scripts.
+  build-client:
+    name: Build the client
+    needs: [publish]
+    if: ${{ inputs.publish && inputs.deploy }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.channel }}
+    permissions:
+      contents: read
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      VERSION: ${{ inputs.version }}
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
+        with:
+          sha: ${{ github.event.client_payload.sha }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
+
+      - name: Build the client
+        uses: ./.github/actions/build-client
+        with:
+          channel: ${{ inputs.channel }}
+          version: ${{ inputs.version }}
+          github-client-id: ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+          client-origin: ${{ vars.TERMENBOX_CLIENT_ORIGIN }}
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: client-dist
+          path: packages/client/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@main
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: build-client-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+
+  deploy:
+    name: Deploy the client
+    needs: [build-client, publish]
+    if: ${{ inputs.publish && inputs.deploy }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The client of this channel, from the same commit, after the release is published; a failure leaves the release
+    # published and the run red. Two deploys of one channel do not overlap.
+    concurrency:
+      group: pages-deploy-${{ inputs.channel }}
+      cancel-in-progress: false
+    environment: ${{ inputs.channel }}
+    permissions:
+      contents: write
+      deployments: write
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      KID: ${{ inputs.kid }}
+      VERSION: ${{ inputs.version }}
+      TAG: ${{ inputs.tag }}
+      PUBLISH: ${{ inputs.publish }}
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@main
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@main
+        with:
+          sha: ${{ github.event.client_payload.sha }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+          remote: true
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: client-dist
+          path: packages/client/dist
+
       - name: Deploy the client
-        if: inputs.publish && inputs.deploy
         uses: ./.github/actions/deploy-pages
         with:
           channel: ${{ inputs.channel }}
@@ -442,7 +712,6 @@ jobs:
           release-repo: termenbox/termenbox
           pages-project-name: ${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}
           d1-database-id: ${{ vars.TERMENBOX_D1_DATABASE_ID }}
-          client-origin: ${{ vars.TERMENBOX_CLIENT_ORIGIN }}
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           github-client-id: ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
@@ -456,7 +725,7 @@ jobs:
         uses: termenbox/termenbox-ci/.github/actions/finish@main
         with:
           key: ${{ secrets.LOG_KEY }}
-          name: manifest-${{ strategy.job-index }}
+          name: deploy-${{ strategy.job-index }}
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
           secrets: |-
@@ -465,9 +734,6 @@ jobs:
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.MIRROR_TOKEN }}
-            ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
-            ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
-            ${{ secrets.RELEASE_SIGNING_KEY }}
             ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.TERMENBOX_CERT_SIGNING_KEY }}
             ${{ secrets.TERMENBOX_DIRECTORY_SALT }}

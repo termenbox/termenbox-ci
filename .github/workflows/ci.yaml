@@ -469,6 +469,7 @@ jobs:
           sh .github/scripts/test-prune-nightlies.sh
           sh .github/scripts/test-update-alias.sh
           sh .github/scripts/test-publish-r2.sh
+          sh .github/scripts/test-check-pins.sh
           sh .github/scripts/test-ci-scope.sh
 
       - if: always()
@@ -1134,9 +1135,10 @@ jobs:
 
       - name: Test and run the check
         run: |
-          node --test scripts/check-security-surface.test.mjs scripts/check-security-review.test.mjs scripts/check-release-gate.test.mjs scripts/check-pinned-actions.test.mjs scripts/check-job-environments.test.mjs scripts/bundle-sign.test.mjs scripts/install-verified.test.mjs scripts/check-template-review.test.mjs scripts/check-deploy-token-scope.test.mjs scripts/check-workflow-secrets.test.mjs scripts/check-security-jobs.test.mjs scripts/check-pnpm-audit.test.mjs scripts/check-cert-kid.test.mjs
+          node --test scripts/check-security-surface.test.mjs scripts/check-security-review.test.mjs scripts/check-release-gate.test.mjs scripts/check-pinned-actions.test.mjs scripts/check-job-environments.test.mjs scripts/bundle-sign.test.mjs scripts/install-verified.test.mjs scripts/check-template-review.test.mjs scripts/check-deploy-token-scope.test.mjs scripts/check-workflow-secrets.test.mjs scripts/check-security-jobs.test.mjs scripts/check-pnpm-audit.test.mjs scripts/check-cert-kid.test.mjs scripts/check-image-pins.test.mjs
           node scripts/check-security-surface.mjs
           node scripts/check-pinned-actions.mjs
+          node scripts/check-image-pins.mjs --workflows
           node scripts/check-job-environments.mjs
           node scripts/check-workflow-secrets.mjs
           node scripts/check-security-jobs.mjs

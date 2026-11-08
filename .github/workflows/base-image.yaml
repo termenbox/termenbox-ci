@@ -1,20 +1,19 @@
 name: Build Base Image
 run-name: "Build Base Image · ${{ github.event.client_payload.pr && format('PR #{0}', github.event.client_payload.pr) || github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}${{ (github.event.client_payload.sha || inputs.sha) && format(' · {0}', (github.event.client_payload.sha || inputs.sha)) || '' }}"
 
-# The runtime base (node, tmux, git, ...) changes rarely. Rebuilding it weekly picks up OS security fixes;
-# app builds then start FROM it and skip all package installs.
+# The runtime base (node, tmux, git, ...) changes rarely. App builds start FROM it and skip all package installs, and the
+# release images carry whatever it holds, so it is built only from a commit that is already on master (a reviewed
+# release) and the job refuses any other commit. A rebuilt base reaches the app image when the
+# digest in docker/Dockerfile is moved in a reviewed change (.github/scripts/check-pins.sh --images lists it).
 on:
   repository_dispatch:
     types: [source-master]
-  schedule:
-    - cron: '17 3 * * 1'
   workflow_dispatch:
     inputs:
       sha:
-        description: 'Source commit to run on (a test of this workflow from a ci-repo branch); empty means the head of develop'
+        description: 'Source commit to build: it must be on master'
         type: string
-        required: false
-        default: ''
+        required: true
 
 permissions:
   contents: read
@@ -70,6 +69,14 @@ jobs:
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
+      - name: The commit is on master
+        env:
+          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          SHA: ${{ (github.event.client_payload.sha || inputs.sha) }}
+        shell: bash
+        run: |
+          status=$(gh api "repos/termenbox/termenbox-source/compare/master...$SHA" --jq .status) || { echo "cannot compare $SHA with master"; exit 1; }
+          case "$status" in identical|behind) ;; *) echo "$SHA is not on master: the base image is built only from a released commit"; exit 1 ;; esac
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
@@ -102,3 +109,4 @@ jobs:
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.STATUS_TOKEN }}
