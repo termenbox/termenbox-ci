@@ -520,9 +520,84 @@ jobs:
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
 
+  sign-sums:
+    name: Sign SHA256SUMS
+    needs: [verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Holds the signing key like the sign job and runs only ci-repo code: it recomputes every hash itself, then signs
+    # SHA256SUMS in a namespace of its own, so this signature can never be replayed as the signature of a manifest.
+    environment: ${{ inputs.channel }}
+    permissions:
+      contents: read
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      KID: ${{ inputs.kid }}
+      VERSION: ${{ inputs.version }}
+      PUBLISH: ${{ inputs.publish }}
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@05800815756d549513eb7eaacb18c53601515f41
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: signed-manifest
+          path: signed
+
+      - name: SHA256SUMS lists exactly the release files
+        run: python3 "$TB_RELEASE_TOOLS/check_sums.py" dist/SHA256SUMS dist signed/dist/manifest.json
+
+      - name: Sign SHA256SUMS
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          umask 077
+          if [ -n "$RELEASE_SIGNING_KEY" ] && [ "$PUBLISH" = true ]; then
+            printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release_key"
+            cp signed/keys/release-keys.txt "$RUNNER_TEMP/release-keys.txt"
+          elif [ "$PUBLISH" = true ]; then
+            echo "RELEASE_SIGNING_KEY is not set in the $CHANNEL environment: refusing to publish an unsigned release"; exit 1
+          else
+            echo "::warning::dry run: signing with a throwaway key"
+            ssh-keygen -q -t ed25519 -N '' -C throwaway -f "$RUNNER_TEMP/release_key"
+            bound=""; [ "$CHANNEL" = stable ] || bound=" channel=$CHANNEL"
+            echo "$KID $(cut -d' ' -f1,2 "$RUNNER_TEMP/release_key.pub")$bound" > "$RUNNER_TEMP/release-keys.txt"
+          fi
+          ssh-keygen -Y sign -n termenbox-sums -f "$RUNNER_TEMP/release_key" dist/SHA256SUMS
+          rm -f "$RUNNER_TEMP/release_key"
+          grep -v '^#' "$RUNNER_TEMP/release-keys.txt" | awk -v kid="$KID" '$1 == kid && NF >= 3 { print "termenbox-release " $2 " " $3 }' > "$RUNNER_TEMP/allowed_signers"
+          [ -s "$RUNNER_TEMP/allowed_signers" ] || { echo "release-keys.txt has no key $KID"; exit 1; }
+          ssh-keygen -Y verify -f "$RUNNER_TEMP/allowed_signers" -I termenbox-release -n termenbox-sums -s dist/SHA256SUMS.sig < dist/SHA256SUMS
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-sums-signature
+          path: dist/SHA256SUMS.sig
+          retention-days: 7
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: sign-sums-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.RELEASE_SIGNING_KEY }}
+
   publish:
     name: Publish
-    needs: [verify]
+    needs: [verify, sign-sums]
     if: ${{ inputs.publish }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -597,6 +672,7 @@ jobs:
             dist/tmux-x86_64-linux dist/tmux-aarch64-linux dist/tmux-COPYING dist/tmux-libevent-LICENSE dist/tmux-ncurses-COPYING
             dist/LICENSE dist/NOTICES dist/SHA256SUMS dist/manifest.json dist/manifest.json.sig)
           [ ! -f dist/install.sh ] || files+=(dist/install.sh)
+          files+=(dist/SHA256SUMS.sig)
           if gh release view "$TAG" >/dev/null 2>&1; then
             # A run again after R2 succeeded and this step did not. The R2 step above has just found the published manifest
             # to be the one built here (it fails otherwise), so completing the same release adds nothing new. A manifest
