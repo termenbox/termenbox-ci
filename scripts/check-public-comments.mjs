@@ -2,6 +2,8 @@
 // plan or finding of the private source. Prints the file and line, never anything else; exits 1 when one is found.
 import { readdirSync, readFileSync } from "node:fs";
 
+const tools = new URL("../release/", import.meta.url);
+
 const dir = new URL("../.github/workflows/", import.meta.url);
 const INTERNAL = /docs\/plans\/|DECISION-\d|FACT-\d|GUARDRAIL|SR-\d{4}-\d|(?:decisions?|facts?) \d{4}|private source/i;
 let bad = 0;
@@ -13,5 +15,12 @@ for (const f of readdirSync(dir)) {
     if (line.trimStart().startsWith("#")) { if (!run) start = i + 1; run += " " + line.replace(/^\s*#\s?/, ""); } else flush();
   });
   flush();
+}
+// The release scripts are public too: their whole text (comments and docstrings alike) must name nothing internal.
+for (const f of readdirSync(tools)) {
+  if (f === "__pycache__") continue;
+  readFileSync(new URL(f, tools), "utf8").split("\n").forEach((line, i) => {
+    if (INTERNAL.test(line)) { console.log(`release/${f}:${i + 1}: names something internal`); bad++; }
+  });
 }
 process.exit(bad ? 1 : 0);

@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""Writes manifest.json for a release.
+
+usage: make_manifest.py VERSION ASSET_DIR OUT [--channel stable|beta|nightly] [--tag TAG] [--base-url URL] [--freeze] [--notes TEXT] [--no-tmux] [--image-digests FILE]
+
+VERSION is the manifest version, full SemVer with an optional prerelease (1.2.3, 1.2.3-beta.1,
+1.2.3-nightly.20261022). --tag names the mirror release the same files are copied to (default v<VERSION>); it is printed, and no
+longer part of any address, because the assets are served from the project host. --base-url
+(installer tests only) replaces the whole download address with URL, so a test release can be fetched from a
+file:// directory. --channel (default stable) is signed into the manifest.
+
+ASSET_DIR holds one file per architecture named termenbox-server-<arch>-linux (x86_64, aarch64). The manifest
+lists each with its download URL, https://dl.termenbox.dev/<channel>/<version>/<file>, and its SHA-256. CI signs the exact bytes
+written here, so the output is deterministic (sorted keys, no timestamps).
+
+It also holds the bundled tmux: tmux-<arch>-linux per architecture, listed under "tmux" the same
+way, and the licence notices that travel with it (tmux-COPYING, tmux-libevent-LICENSE, tmux-ncurses-COPYING),
+listed under "tmux_notices". They are required unless --no-tmux is given (the installer tests that stub a release).
+
+--image-digests FILE is the JSON image_digests.py wrote, {"x86_64": "sha256:...", "aarch64": "sha256:..."}.
+It is signed into the manifest as "image", so a container install pulls the digest the release key vouched for. Without
+it the manifest has no "image" and is not a container release.
+"""
+import hashlib
+import json
+import re
+import sys
+import time
+from pathlib import Path
+
+BASE = "https://dl.termenbox.dev"
+ARCHES = ("x86_64", "aarch64")
+CHANNELS = ("stable", "beta", "nightly")
+SEMVER = re.compile(
+    r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(-((0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?"
+)
+TMUX_NOTICES = ("tmux-COPYING", "tmux-libevent-LICENSE", "tmux-ncurses-COPYING")
+
+
+def entry(base, path):
+    if not path.is_file():
+        sys.exit(f"missing {path}")
+    return {
+        "url": f"{base}/{path.name}",
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+
+
+def main(argv):
+    args = [a for a in argv[1:] if not a.startswith("--")]
+    freeze = "--freeze" in argv
+    with_tmux = "--no-tmux" not in argv
+
+    def option(name, default):
+        nonlocal args
+        if name not in argv:
+            return default
+        value = argv[argv.index(name) + 1]
+        args = [a for a in args if a != value]
+        return value
+
+    notes = option("--notes", "")
+    channel = option("--channel", "stable")
+    tag = option("--tag", None)
+    base_url = option("--base-url", None)
+    image_file = option("--image-digests", None)
+    if len(args) != 3:
+        sys.exit(__doc__)
+    version, asset_dir, out = args[0], Path(args[1]), Path(args[2])
+    if not SEMVER.fullmatch(version):
+        sys.exit(f"version must look like 1.2.3 or 1.2.3-beta.1, got {version!r}")
+    if channel not in CHANNELS:
+        sys.exit(f"channel must be one of {', '.join(CHANNELS)}, got {channel!r}")
+    tag = tag or f"v{version}"
+    base = base_url.rstrip("/") if base_url else f"{BASE}/{channel}/{version}"
+    binaries = {arch: entry(base, asset_dir / f"termenbox-server-{arch}-linux") for arch in ARCHES}
+    manifest = {"version": version, "channel": channel, "freeze": freeze, "issued_at": int(time.time()), "notes": notes, "binaries": binaries}
+    if with_tmux:
+        manifest["tmux"] = {arch: entry(base, asset_dir / f"tmux-{arch}-linux") for arch in ARCHES}
+        manifest["tmux_notices"] = {name: entry(base, asset_dir / name) for name in TMUX_NOTICES}
+    if image_file:
+        image = json.loads(Path(image_file).read_text())
+        if sorted(image) != sorted(ARCHES) or not all(re.fullmatch(r"sha256:[0-9a-f]{64}", d) for d in image.values()):
+            sys.exit(f"{image_file} must hold a sha256 digest for each of {', '.join(ARCHES)}")
+        manifest["image"] = image
+    out.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+    print(f"wrote {out} for {version} ({channel}, tag {tag})")
+
+
+if __name__ == "__main__":
+    main(sys.argv)
