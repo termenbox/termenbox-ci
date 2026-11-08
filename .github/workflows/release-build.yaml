@@ -341,7 +341,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # The signing key is the secret RELEASE_SIGNING_KEY of this environment, so a channel's key is only ever
-    # available to a run of that channel. This job checks out nothing and runs nothing but the steps below.
+    # available to a run of that channel. This job checks out nothing; the only code it runs is this workflow and the
+    # release-tools copy of this repository, and it signs nothing before the manifest matches the built files.
     environment: ${{ inputs.channel }}
     permissions:
       contents: read
@@ -355,11 +356,21 @@ jobs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@71200b2000ffe8807487d96c534b0dd921fe795b
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: unsigned-manifest
           path: .
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: release-*
+          path: built
+          merge-multiple: true
+
+      # The build jobs run the source's code and could upload any manifest: sign only what is exactly the built files.
+      - name: The manifest is the one of the built files
+        run: python3 "$TB_RELEASE_TOOLS/check_manifest.py" dist/manifest.json built "$VERSION" "$CHANNEL"
 
       - name: Sign the manifest
         env:
