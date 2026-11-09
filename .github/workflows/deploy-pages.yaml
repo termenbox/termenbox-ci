@@ -115,7 +115,7 @@ jobs:
     # Two deployments of one channel never overlap (the D1 migrations in particular). A newer one waits, and a newer
     # one replaces an older one that is still waiting: the last deployment is the one that matters.
     concurrency:
-      group: deploy-pages-${{ inputs.channel }}
+      group: pages-deploy-${{ inputs.channel }}
       cancel-in-progress: false
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
@@ -182,3 +182,29 @@ jobs:
             ${{ secrets.TERMENBOX_DIRECTORY_SALT }}
             ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
             ${{ secrets.TERMENBOX_GITHUB_CLIENT_SECRET }}
+
+  # Reads the origin the way a browser does once the deployment is up; it holds no secret and runs code of this repository
+  # only. A failure leaves the deployment in place and turns the run red.
+  verify-origin:
+    name: Verify the origin
+    needs: [deploy]
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Read the origin
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          case "$CHANNEL" in
+            stable) host=app.termenbox.dev ;;
+            beta) host=beta.app.termenbox.dev ;;
+            nightly) host=nightly.app.termenbox.dev ;;
+            *) echo "unknown channel"; exit 1 ;;
+          esac
+          node release/verify_origin.mjs "https://$host" "$CHANNEL" 150
