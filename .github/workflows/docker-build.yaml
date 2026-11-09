@@ -53,6 +53,9 @@ jobs:
   plan:
     name: Plan the image tags
     runs-on: ubuntu-latest
+    # A manual run pushes any tag but latest, so it passes the review gate below, which reads the review repo with REVIEWS_TOKEN, a
+    # secret of the beta Environment. A pull request and a release workflow's call have no Environment and pass no gate here.
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'beta' || '' }}
     timeout-minutes: 5
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
