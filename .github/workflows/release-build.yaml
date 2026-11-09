@@ -186,13 +186,12 @@ jobs:
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
 
-  # Every channel starts docker-build.yaml beside this workflow (a tag starts it for stable and beta, release-nightly.yaml
-  # calls it), so the image may still be building: wait for the multi-architecture tag and record the digests the signed
-  # manifest will name. It holds no secret. A dry run pushes none.
-  # The build is not a job this one needs, so while it waits the script asks whether that build already failed or was
-  # cancelled and then stops at once (the 70 minutes stay as the backstop): for a nightly the "Image / " jobs of this run,
-  # for a stable or beta tag the newest docker-build run titled "Image <tag>" (its run-name). The manifest job needs this
-  # one, so a failed image build leaves it skipped and nothing is published.
+  # Every channel's release workflow calls docker-build.yaml as its `Image` job beside this workflow, so the image may
+  # still be building: wait for the multi-architecture tag and record the digests the signed manifest will name. It holds
+  # no secret. A dry run pushes none.
+  # The build is not a job this one needs, so while it waits the script asks whether the "Image / " jobs of this run
+  # already failed or were cancelled and then stops at once (the 70 minutes stay as the backstop). The manifest job needs
+  # this one, so a failed image build leaves it skipped and nothing is published.
   image:
     name: Image digests
     needs: build
@@ -224,13 +223,10 @@ jobs:
       - name: Wait for the image of this version and read its digests
         env:
           VERSION: ${{ inputs.version }}
-          TAG: ${{ inputs.tag }}
-          CHANNEL: ${{ inputs.channel }}
           SHA: ${{ inputs.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "$CHANNEL" = nightly ]; then flag=--build-jobs; what="Image / "; else flag=--build-run; what="Image $TAG"; fi
-          python3 "$TB_RELEASE_TOOLS/image_digests.py" "ghcr.io/termenbox/termenbox:${VERSION}" image-digests.json --commit "$SHA" --wait 4200 "$flag" "$what"
+          python3 "$TB_RELEASE_TOOLS/image_digests.py" "ghcr.io/termenbox/termenbox:${VERSION}" image-digests.json --commit "$SHA" --wait 4200 --build-jobs "Image / "
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-image

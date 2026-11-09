@@ -1,6 +1,5 @@
 name: Build & Push Docker Image
 
-# release-build.yaml finds the run of a stable or beta tag by this title, to stop waiting for an image whose build failed.
 run-name: "Image ${{ github.event.client_payload.tag || github.event.client_payload.event || 'manual' }}"
 
 # The image tags follow the channels: a stable tag pushes latest, X.Y and X.Y.Z; a beta tag pushes beta
@@ -8,12 +7,13 @@ run-name: "Image ${{ github.event.client_payload.tag || github.event.client_payl
 # for a push to master, and there is no `edge`. release_plan.py decides, so the tags cannot drift from the release.
 on:
   repository_dispatch:
-    types: [source-pushed, source-tag]
+    types: [source-pushed]
   workflow_call:
     inputs:
       sha: { description: 'commit to build', required: true, type: string }
       version: { description: 'full SemVer the image reports', required: true, type: string }
       tags: { description: 'space separated image tags to push', required: true, type: string }
+      channel: { description: 'channel whose Environment and build cache the image uses', required: false, type: string, default: 'nightly' }
   workflow_dispatch:
     inputs:
       sha:
@@ -53,9 +53,9 @@ jobs:
   plan:
     name: Plan the image tags
     runs-on: ubuntu-latest
-    # A stable or beta tag push reads the review repo with REVIEWS_TOKEN, a secret of that channel's Environment (a tag with a
-    # hyphen is a beta). Any other event has no Environment, holds no token and so passes no gate.
-    environment: ${{ (github.event.client_payload.event == 'tag' && contains(github.event.client_payload.tag, '-') && 'beta') || (github.event.client_payload.event == 'tag' && 'stable') || '' }}
+    # A manual run pushes any tag but latest, so it passes the review gate below, which reads the review repo with REVIEWS_TOKEN, a
+    # secret of the beta Environment. A pull request and a release workflow's call have no Environment and pass no gate here.
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'beta' || '' }}
     timeout-minutes: 5
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
@@ -81,19 +81,14 @@ jobs:
           CALL_TAGS: ${{ inputs.tags }}
           SHA: ${{ inputs.sha || (github.event.client_payload.sha || inputs.sha) }}
           CALL_VERSION: ${{ inputs.version }}
+          CALL_CHANNEL: ${{ inputs.channel }}
           DISPATCH_TAG: ${{ github.event.inputs.tag }}
           BASE: ${{ github.event.client_payload.base }}
         run: |
           tags=""; version=""; run=true; channel=nightly
           if [ -n "$CALL_TAGS" ]; then
-            # called by release-nightly.yaml, whose own event name this workflow sees
-            tags="$CALL_TAGS"; version="$CALL_VERSION"
-          elif [ "$TB_EVENT" = tag ]; then
-            plan="$(python3 "$TB_RELEASE_TOOLS/release_plan.py" tag "$TB_TAG")"
-            if [ "$(jq -r .channel <<<"$plan")" = none ]; then
-              echo "::notice::$TB_TAG is not a stable or beta tag; no image"; run=false
-            fi
-            tags="$(jq -r '.docker_tags | join(" ")' <<<"$plan")"; version="$(jq -r .version <<<"$plan")"; channel="$(jq -r .channel <<<"$plan")"; [ "$channel" != none ] || channel=nightly
+            # called by a release workflow, whose own event name this workflow sees; its gate has already passed
+            tags="$CALL_TAGS"; version="$CALL_VERSION"; channel="$CALL_CHANNEL"
           elif [ "$TB_EVENT" = workflow_dispatch ]; then
             # `latest` moves only for a stable tag; a manual run may push any other tag.
             case " $DISPATCH_TAG " in
@@ -122,8 +117,8 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # No image tag is pushed unless this step passes, so the build
-      # jobs below (which need this one) never run. It covers a stable or beta tag and a manual run; a pull request pushes
-      # nothing and the nightly (called with its tags) is exempt.
+      # jobs below (which need this one) never run. It covers a manual run; a pull request pushes
+      # nothing and a release workflow (calling with its tags, after its own gate) is exempt.
       - name: Security review gate
         if: steps.p.outputs.run == 'true' && (github.event.client_payload.event || github.event_name) != 'pull_request' && inputs.tags == ''
         env:
