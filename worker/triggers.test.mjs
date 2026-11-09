@@ -27,7 +27,7 @@ const rows = [
   ["push to master", "push", { repository: repo, ref: "refs/heads/master", after: A, before: B }, [...PUSHED, "base-image", "deploy-site"]],
   ["pull request to develop", "pull_request", prOn("develop"), PUSHED],
   ["pull request to master", "pull_request", prOn("master"), PUSHED],
-  ["tag v*", "push", { repository: repo, ref: "refs/tags/v1.2.3", after: A, before: Z }, ["release-stable", "release-beta", "docker-build"]],
+  ["tag v*", "push", { repository: repo, ref: "refs/tags/v1.2.3", after: A, before: Z }, ["release-stable", "release-beta"]],
   ["comment on a docs-media issue", "issue_comment", { repository: repo, action: "created", issue: review("docs-media"), comment: { id: 1, body: "/approve" } }, ["docs-media-review", "template-review"]],
   ["edit of a docs-media issue", "issues", { repository: repo, action: "edited", issue: review("docs-media"), changes: { body: { from: "x" } }, sender: { login: "o" } }, ["docs-media-review", "template-review"]],
   ["edit of a template-review issue", "issues", { repository: repo, action: "edited", issue: review("template-review"), changes: { body: { from: "x" } }, sender: { login: "o" } }, ["docs-media-review", "template-review"]],

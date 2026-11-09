@@ -38,6 +38,7 @@ jobs:
       version: ${{ steps.g.outputs.version }}
       tag: ${{ steps.g.outputs.tag }}
       aliases: ${{ steps.g.outputs.aliases }}
+      docker_tags: ${{ steps.g.outputs.docker_tags }}
       publish: ${{ steps.g.outputs.publish }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
@@ -77,6 +78,7 @@ jobs:
             echo "run=true"; echo "publish=$publish"; echo "tag=$tag"
             echo "version=$(jq -r .version <<<"$plan")"
             echo "aliases=$(jq -r '.aliases | join(" ")' <<<"$plan")"
+            echo "docker_tags=$(jq -r '.docker_tags | join(" ")' <<<"$plan")"
           } >> "$GITHUB_OUTPUT"
       # No signing job runs unless this step passes.
       # It also runs on a dry run, so a stale or open review shows up before a real tag does.
@@ -119,6 +121,24 @@ jobs:
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.REVIEWS_TOKEN }}
+
+  # GitHub does not start a workflow for a tag its own token created, and a second run would need its own approvals, so
+  # the image is built by calling the workflow in this run. The release waits for the image tag and signs its digests.
+  image:
+    name: Image
+    needs: gate
+    if: needs.gate.outputs.run == 'true' && needs.gate.outputs.publish == 'true'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/docker-build.yaml
+    secrets: inherit
+    with:
+      sha: ${{ github.event.client_payload.sha }}
+      version: ${{ needs.gate.outputs.version }}
+      tags: ${{ needs.gate.outputs.docker_tags }}
+      channel: beta
 
   release:
     name: Release
