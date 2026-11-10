@@ -6,7 +6,7 @@ name: Security Sweep
 # policy (main) and no reviewer: its tokens read, and only the `report` job holds the one token that writes issues.
 #   state  : reads the last seen manifest versions                         (SWEEP_READ_TOKEN)
 #   tools  : runs the source tree's tools; holds no secret but a checkout token that only the checkout step sees
-#   sweep  : runs the checks of this repo's sweep/ directory               (SWEEP_READ_TOKEN, SOURCE_TOKEN, LOG_TOKEN, STATUS_TOKEN)
+#   sweep  : runs the checks of this repo's sweep/ directory, with the read token and the repo-level tokens the expiry check reads
 #   report : posts the counts and names                                    (SWEEP_TOKEN)
 on:
   schedule:
