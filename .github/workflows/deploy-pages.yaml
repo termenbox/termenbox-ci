@@ -54,12 +54,24 @@ env:
   CHANNEL: ${{ inputs.channel }}
 
 jobs:
+  # The one review of this run. It holds no secret and runs no code; every job that uses a channel Environment needs it
+  # (scripts/check-approval-jobs.mjs), so the channel Environments carry secrets and a branch policy but no reviewer.
+  approve:
+    name: Approve
+    if: ${{ inputs.channel != 'nightly' }}
+    runs-on: ubuntu-latest
+    environment: approve-${{ inputs.channel }}
+    steps:
+      - shell: bash
+        run: echo "approved"
+
   # Builds the client from the commit in a job that holds no deploy credential: it reads the public client id and the source
   # token. The Cloudflare token, the function secrets and the certificate key are in the deploy job. A deploy of a staged
   # bundle (tag) builds nothing.
   build:
     name: Build ${{ inputs.channel }} client
-    if: inputs.tag == ''
+    needs: approve
+    if: ${{ !cancelled() && inputs.tag == '' && (needs.approve.result == 'success' || needs.approve.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ inputs.channel }}
@@ -107,8 +119,8 @@ jobs:
 
   deploy:
     name: Deploy ${{ inputs.channel }} to Cloudflare Pages
-    needs: [build]
-    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    needs: [approve, build]
+    if: ${{ !cancelled() && needs.build.result != 'failure' && (needs.approve.result == 'success' || needs.approve.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ inputs.channel }}

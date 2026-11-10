@@ -53,7 +53,20 @@ env:
   TB_TAG: ${{ github.event.client_payload.tag }}
 
 jobs:
+  # The one review of this run. It holds no secret and runs no code; every job that uses a channel Environment needs it
+  # (scripts/check-approval-jobs.mjs), so the channel Environments carry secrets and a branch policy but no reviewer.
+  approve:
+    name: Approve
+    if: ${{ inputs.channel != 'nightly' }}
+    runs-on: ubuntu-latest
+    environment: approve-${{ inputs.channel }}
+    steps:
+      - shell: bash
+        run: echo "approved"
+
   freeze:
+    needs: approve
+    if: ${{ !cancelled() && (needs.approve.result == 'success' || needs.approve.result == 'skipped') }}
     name: Freeze ${{ inputs.channel }}
     runs-on: ubuntu-latest
     timeout-minutes: 10

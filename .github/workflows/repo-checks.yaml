@@ -23,10 +23,12 @@ jobs:
         run: node scripts/check-gate-token.mjs
       - name: Comments name nothing internal
         run: node scripts/check-public-comments.mjs
+      - name: One approval per run
+        run: node scripts/check-approval-jobs.mjs
       - name: Pages deployments share one concurrency group
         run: node scripts/check-pages-group.mjs
       - name: Tests of the checks and of the Worker triggers
-        run: node --test scripts/check-action-refs.test.mjs scripts/check-gate-token.test.mjs scripts/check-pages-group.test.mjs release/verify_origin.test.mjs worker/triggers.test.mjs
+        run: node --test scripts/check-action-refs.test.mjs scripts/check-gate-token.test.mjs scripts/check-pages-group.test.mjs scripts/check-approval-jobs.test.mjs release/verify_origin.test.mjs worker/triggers.test.mjs
       - name: Tests of the release scripts
         run: |
           for t in release/test-*.sh; do echo "$t"; sh "$t" > /dev/null; done
