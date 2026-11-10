@@ -49,9 +49,22 @@ env:
   PUSH: ${{ (github.event.client_payload.event || github.event_name) != 'pull_request' }}
 
 jobs:
+  # The one review of this run. It holds no secret and runs no code; every job that uses a channel Environment needs it
+  # (scripts/check-approval-jobs.mjs), so the channel Environments carry secrets and a branch policy but no reviewer.
+  approve:
+    name: Approve
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    environment: approve-beta
+    steps:
+      - shell: bash
+        run: echo "approved"
+
   # Decides whether this run builds and what it pushes.
   plan:
     name: Plan the image tags
+    needs: approve
+    if: ${{ !cancelled() && (needs.approve.result == 'success' || needs.approve.result == 'skipped') }}
     runs-on: ubuntu-latest
     # A manual run pushes any tag but latest, so it passes the review gate below, which reads the review repo with REVIEWS_TOKEN, a
     # secret of the beta Environment. A pull request and a release workflow's call have no Environment and pass no gate here.
