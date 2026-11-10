@@ -1,0 +1,160 @@
+name: Security Sweep
+
+# Monthly, run every recurring security check and post only the number of passing and failing checks and the NAMES of the
+# failing ones to the monthly `sweep` issue of the review repo. The scripts print nothing else; the full output goes to the
+# encrypted log. Code that runs beside a token is authored in this repo (sweep/). The `security` Environment has a branch
+# policy (main) and no reviewer: its tokens read, and only the `report` job holds the one token that writes issues.
+#   state  : reads the last seen manifest versions                         (SWEEP_READ_TOKEN)
+#   tools  : runs the source tree's tools; holds no secret but a checkout token that only the checkout step sees
+#   sweep  : runs the checks of this repo's sweep/ directory               (SWEEP_READ_TOKEN, SOURCE_TOKEN, LOG_TOKEN, STATUS_TOKEN)
+#   report : posts the counts and names                                    (SWEEP_TOKEN)
+on:
+  schedule:
+    - cron: '23 4 3 * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: security-sweep
+  cancel-in-progress: false
+
+jobs:
+  state:
+    name: Last manifest versions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: security
+    permissions: {}
+    outputs:
+      versions: ${{ steps.read.outputs.versions }}
+    steps:
+      - id: read
+        env:
+          GH_TOKEN: ${{ secrets.SWEEP_READ_TOKEN }}
+          REVIEW_REPO: termenbox/termenbox-security
+        run: |
+          # The last sweep's comment carries a marker line `<!-- manifest stable 1.2.3 beta 1.3.0 -->`: the floor of the forward-only check.
+          last=$(gh issue list -R "$REVIEW_REPO" -l sweep -s all -L 1 --json number -q '.[0].number' || true)
+          v=""
+          if [ -n "$last" ]; then
+            v=$(gh api "repos/$REVIEW_REPO/issues/$last/comments" --jq '.[].body' | sed -n 's/^<!-- manifest \(.*\) -->$/\1/p' | tail -n 1) || v=""
+          fi
+          echo "versions=$v" >> "$GITHUB_OUTPUT"
+
+  tools:
+    name: Source tools
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      summary: ${{ steps.tools.outputs.summary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        with:
+          path: source
+          token: ${{ secrets.SOURCE_TOKEN }}
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          version: 9
+          package_json_file: source/package.json
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+
+      - name: Install the pinned tools
+        run: cargo install --locked cargo-deny --version 0.18.5
+
+      - name: Run the tools
+        id: tools
+        env:
+          SWEEP_SOURCE_DIR: ${{ github.workspace }}/source
+          SWEEP_SUMMARY: ${{ runner.temp }}/tools-summary.txt
+        run: |
+          rc=0
+          sh sweep/security-sweep.sh --tools || rc=$?
+          { echo 'summary<<EOF'; cat "$SWEEP_SUMMARY"; echo EOF; } >> "$GITHUB_OUTPUT"
+          exit "$rc"
+
+  sweep:
+    name: Sweep
+    needs: [state]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: security
+    permissions:
+      contents: read
+    outputs:
+      summary: ${{ steps.sweep.outputs.summary }}
+      versions: ${{ steps.sweep.outputs.versions }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+
+      - name: Install the pinned tools
+        run: |
+          pipx install zizmor==1.32.0
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run the sweep
+        id: sweep
+        env:
+          GH_TOKEN: ${{ secrets.SWEEP_READ_TOKEN }}
+          SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+          LOG_TOKEN: ${{ secrets.LOG_TOKEN }}
+          STATUS_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          SWEEP_GH_REPO: ${{ github.repository }}
+          SWEEP_SUMMARY: ${{ runner.temp }}/sweep-summary.txt
+          SWEEP_STATE: ${{ runner.temp }}/sweep-state.txt
+          LAST_VERSIONS: ${{ needs.state.outputs.versions }}
+        run: |
+          [ -z "$LAST_VERSIONS" ] || printf '%s\n' "$LAST_VERSIONS" | tr ' ' '\n' | paste - - > "$SWEEP_STATE"
+          rc=0
+          sh sweep/security-sweep.sh || rc=$?
+          # Counts and failing check names only: that is all the script prints, and all that leaves this job.
+          { echo 'summary<<EOF'; cat "$SWEEP_SUMMARY"; echo EOF; } >> "$GITHUB_OUTPUT"
+          echo "versions=$(awk '{ printf "%s%s %s", (NR>1 ? " " : ""), $1, $2 }' "$SWEEP_STATE")" >> "$GITHUB_OUTPUT"
+          exit "$rc"
+
+  report:
+    name: Report
+    needs: [tools, sweep]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: security
+    permissions: {}
+    steps:
+      - name: Post the counts and the failing names
+        env:
+          GH_TOKEN: ${{ secrets.SWEEP_TOKEN }}
+          REVIEW_REPO: termenbox/termenbox-security
+          SUMMARY: ${{ needs.sweep.outputs.summary }}
+          TOOLS: ${{ needs.tools.outputs.summary }}
+          VERSIONS: ${{ needs.sweep.outputs.versions }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$SUMMARY" ] || SUMMARY='sweep: did not finish'
+          [ -n "$TOOLS" ] || TOOLS='sweep: did not finish'
+          month=$(date -u +%Y-%m)
+          num=$(gh issue list -R "$REVIEW_REPO" -l sweep -s open --search "Sweep $month in:title" -L 1 --json number -q '.[0].number')
+          if [ -z "$num" ]; then
+            num=$(gh issue create -R "$REVIEW_REPO" -l sweep -t "Sweep $month" -b "Monthly sweep. Counts and failing check names only." | sed 's#.*/##')
+          fi
+          {
+            printf 'This repo:\n%s\n\nSource tools:\n%s\n\nRun: %s (the detail is in the encrypted log)\n' "$SUMMARY" "$TOOLS" "$RUN_URL"
+            [ -z "$VERSIONS" ] || printf '<!-- manifest %s -->\n' "$VERSIONS"
+          } > "$RUNNER_TEMP/comment.md"
+          gh issue comment "$num" -R "$REVIEW_REPO" -F "$RUNNER_TEMP/comment.md" >/dev/null
