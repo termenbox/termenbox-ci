@@ -185,3 +185,7 @@ jobs:
       latest: true
       aliases: ${{ needs.gate.outputs.aliases }}
       deploy: true
+      notes: |-
+        Known and accepted for this release:
+        - The web client at app.termenbox.dev is deployed after this release is published, once its bundle has been signed offline. Until then the previous client is served; it verifies this release's signed manifest in the same way.
+        - The signing and update trust roots were reviewed by the maintainer's own process only, not by an independent human reader.
