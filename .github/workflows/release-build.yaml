@@ -856,6 +856,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Read the origin
+        shell: bash
         env:
           CHANNEL: ${{ inputs.channel }}
         run: |
