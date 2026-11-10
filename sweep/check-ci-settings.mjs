@@ -88,7 +88,7 @@ export function evaluate(s, spec) {
   need('wiki-off', s.repo?.has_wiki === false);
   need('discussions-off', s.repo?.has_discussions === false);
   if (typeof spec.collaborators === 'number') {
-    need('one-collaborator', Array.isArray(s.collaborators) && s.collaborators.length === spec.collaborators);
+    need('collaborator-count', Array.isArray(s.collaborators) && s.collaborators.length === spec.collaborators);
   }
   need('webhooks-match-worker',
     Array.isArray(s.hooks) && sameSet(s.hooks.map((h) => h?.config?.url), spec.hooks));

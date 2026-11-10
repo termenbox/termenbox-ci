@@ -17,7 +17,7 @@ function ciFixture() {
     '/actions/permissions/workflow': { default_workflow_permissions: 'read', can_approve_pull_request_reviews: false },
     '/actions/permissions/selected-actions': { github_owned_allowed: true, verified_allowed: false, patterns_allowed: [`actions/cache/save@${SHA}`, `Swatinem/rust-cache@${SHA}`] },
     '/actions/permissions/fork-pr-contributor-approval': { approval_policy: 'all_external_contributors' },
-    '/collaborators': [{ login: 'x' }],
+    '/collaborators': [{ login: 'x' }, { login: 'z' }],
     '/hooks': [],
     '/actions/secrets': { secrets: REPOS.ci.secrets.map((name) => ({ name })) },
     '/environments': { environments: [...GATED_ENVIRONMENTS, ...BRANCH_ONLY_ENVIRONMENTS].map(env) },
@@ -30,7 +30,7 @@ function privateFixture() {
     '': { has_issues: false, has_wiki: false, has_discussions: false },
     '/actions/permissions': { enabled: false },
     '/actions/permissions/workflow': { default_workflow_permissions: 'read', can_approve_pull_request_reviews: false },
-    '/collaborators': [{ login: 'x' }],
+    '/collaborators': [{ login: 'x' }, { login: 'z' }],
     '/hooks': [{ config: { url: WORKER_URL } }],
     '/actions/secrets': { secrets: [] },
   };
@@ -71,7 +71,7 @@ test('ci repo: each broken setting names its check', () => {
     [(f) => { f[''].has_issues = true; }, 'issues-off'],
     [(f) => { f[''].has_wiki = true; }, 'wiki-off'],
     [(f) => { f[''].has_discussions = true; }, 'discussions-off'],
-    [(f) => { f['/collaborators'].push({ login: 'y' }); }, 'one-collaborator'],
+    [(f) => { f['/collaborators'].push({ login: 'y' }); }, 'collaborator-count'],
     [(f) => { f['/hooks'].push({ config: { url: 'https://example.invalid' } }); }, 'webhooks-match-worker'],
     [(f) => { f['/actions/secrets'].secrets.push({ name: 'EXTRA' }); }, 'repo-secrets-match-list'],
     [(f) => { f['/environments'].environments = f['/environments'].environments.filter((e) => e.name !== 'cloud'); }, 'environment-cloud-exists'],
@@ -94,7 +94,7 @@ test('private repo: Actions on and a wrong hook fail; issues and a second collab
   f['/hooks'] = [];
   const bad = priv(f);
   for (const n of ['actions-enabled-as-intended', 'webhooks-match-worker']) assert.ok(bad.includes(n), n);
-  for (const n of ['one-collaborator', 'issues-off']) assert.ok(!bad.includes(n), n);
+  for (const n of ['collaborator-count', 'issues-off']) assert.ok(!bad.includes(n), n);
 });
 
 test('an unreadable setting fails rather than passes', () => {
