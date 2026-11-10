@@ -70,7 +70,7 @@ jobs:
           node-version: '24'
 
       - name: Install the pinned tools
-        run: cargo install --locked cargo-deny --version 0.18.5
+        run: cargo install --locked cargo-deny --version 0.20.2
 
       - name: Run the tools
         id: tools
