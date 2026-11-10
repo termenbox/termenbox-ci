@@ -20,6 +20,7 @@
 #   SWEEP_CI_BYTES  live artifact bytes the ci-storage check allows, default 2000000000; SWEEP_CACHE_BYTES the cache bytes, default 7000000000
 #   SWEEP_MANIFEST_WARN_DAYS  age in days from which a channel's signed manifest fails the manifest-age check, default 60
 #                  (the installer and the updater refuse one older than 90, so this leaves 30 days to sign it again)
+#   SWEEP_TOKEN_WARN_DAYS  days before expiry from which a token fails the token-expiry check, default 7
 #   SWEEP_STATE    file holding the last seen manifest versions (`channel version` lines), read and rewritten by the manifest check
 set -u
 cd "$(dirname "$0")/.."
@@ -74,9 +75,9 @@ sub_token_scope() {
   [ "${n:-0}" = 1 ]
 }
 
-# Fails when a token has no expiry or expires within 30 days (GitHub reports a fine-grained token's expiry in a header).
+# Fails when a token has no expiry or expires within SWEEP_TOKEN_WARN_DAYS (default 7) (GitHub reports a fine-grained token's expiry in a header).
 sub_token_expiry() {
-  limit=$(( $(date +%s) + 30*86400 ))
+  limit=$(( $(date +%s) + ${SWEEP_TOKEN_WARN_DAYS:-7}*86400 ))
   for name in $SWEEP_TOKENS; do
     eval "tok=\${$name:-}"
     [ -n "$tok" ] || exit 1
