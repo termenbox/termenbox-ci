@@ -1,0 +1,62 @@
+name: Sweep Diagnose
+
+# Manual only. Re-runs one source tool of the monthly sweep with its full output kept, so the owner can read why a check
+# failed. Every byte of output goes to the encrypted job log (the `quiet` shell), nothing is posted anywhere, and the public
+# log shows only exit codes. Read it with: sh scripts/ci-log.sh <run-id> (in the source repo; needs the log key).
+on:
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: Which tool to run
+        type: choice
+        options: [cargo-deny, fuzz-bounded, both]
+        default: both
+
+permissions: {}
+
+defaults:
+  run:
+    shell: quiet {0}
+
+jobs:
+  diagnose:
+    name: Diagnose ${{ inputs.tool }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        with:
+          path: source
+          token: ${{ secrets.SOURCE_TOKEN }}
+
+      - name: Install cargo-deny
+        if: ${{ inputs.tool != 'fuzz-bounded' }}
+        run: cargo install --locked cargo-deny --version 0.18.5
+
+      - name: Run cargo-deny
+        if: ${{ inputs.tool != 'fuzz-bounded' }}
+        run: |
+          cd source
+          cargo deny --manifest-path packages/server/Cargo.toml check licenses advisories
+
+      - name: Run the bounded fuzz
+        if: ${{ inputs.tool != 'cargo-deny' }}
+        run: |
+          cd source
+          NIGHTLY=nightly-2026-10-15
+          sh scripts/dev.sh --fuzz sh -c "cd packages/server && for t in \$(cargo +$NIGHTLY fuzz list); do echo \"== \$t\"; cargo +$NIGHTLY fuzz run \$t -- -max_total_time=60 || exit 1; done"
+
+      - if: always()
+        uses: termenbox/termenbox-ci/.github/actions/finish@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: diagnose
+          status: ${{ job.status }}
