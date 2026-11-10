@@ -42,7 +42,6 @@ on:
 
 permissions:
   contents: read
-  deployments: write
 
 defaults:
   run:
@@ -122,6 +121,9 @@ jobs:
     needs: [approve, build]
     if: ${{ !cancelled() && needs.build.result != 'failure' && (needs.approve.result == 'success' || needs.approve.result == 'skipped') }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
     timeout-minutes: 15
     environment: ${{ inputs.channel }}
     # Two deployments of one channel never overlap (the D1 migrations in particular). A newer one waits, and a newer

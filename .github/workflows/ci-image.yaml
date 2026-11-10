@@ -19,7 +19,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 defaults:
   run:
@@ -62,6 +61,9 @@ jobs:
     needs: [gate]
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
