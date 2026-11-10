@@ -1,0 +1,157 @@
+{
+  "workerUrl": "https://termenbox-ci-hook.termenbox.workers.dev",
+  "repos": {
+    "termenbox": {
+      "repo": "termenbox/termenbox",
+      "visibility": "public",
+      "issues": true,
+      "discussions": true,
+      "wiki": true,
+      "actions": false,
+      "secrets": [],
+      "hooks": [],
+      "environments": false,
+      "license": true,
+      "topics": true,
+      "description": true,
+      "requiredFiles": [
+        "README.md",
+        "LICENSE",
+        "NOTICES",
+        "SECURITY.md",
+        "CONTRIBUTING.md",
+        "SUPPORT.md"
+      ]
+    },
+    "termenbox-source": {
+      "repo": "termenbox/termenbox-source",
+      "visibility": "private",
+      "issues": true,
+      "actions": false,
+      "secrets": [],
+      "hooks": [
+        "WORKER"
+      ],
+      "environments": false
+    },
+    "termenbox-ci": {
+      "repo": "termenbox/termenbox-ci",
+      "visibility": "public",
+      "issues": false,
+      "discussions": false,
+      "wiki": false,
+      "actions": true,
+      "secrets": [
+        "CLOUDFLARE_WORKERS_TOKEN",
+        "DISPATCH_TOKEN",
+        "LOG_KEY",
+        "LOG_TOKEN",
+        "SOURCE_TOKEN",
+        "STATUS_TOKEN",
+        "WEBHOOK_SECRET"
+      ],
+      "hooks": [],
+      "environments": true,
+      "collaborators": 2,
+      "license": true,
+      "topics": true,
+      "description": true,
+      "requiredFiles": [
+        "README.md"
+      ]
+    },
+    "termenbox-security": {
+      "repo": "termenbox/termenbox-security",
+      "visibility": "private",
+      "issues": true
+    },
+    ".github": {
+      "repo": "termenbox/.github",
+      "visibility": "public",
+      "issues": false,
+      "discussions": false,
+      "wiki": false,
+      "actions": false,
+      "secrets": [],
+      "hooks": [],
+      "environments": false,
+      "license": true,
+      "topics": true,
+      "description": true,
+      "requiredFiles": [
+        "profile/README.md",
+        "CODE_OF_CONDUCT.md"
+      ]
+    }
+  },
+  "markers": [
+    "private source",
+    "LOG_KEY",
+    "RELEASE_TOKEN",
+    "SOURCE_TOKEN",
+    "STATUS_TOKEN",
+    "DOCS_TOKEN",
+    "WEBHOOK_SECRET",
+    "openssl enc",
+    "docs/plans/",
+    "DECISION-\\d",
+    "FACT-\\d",
+    "GUARDRAIL",
+    "SR-2026"
+  ],
+  "attributionHeading": "^#{1,6}\\s*(attribution|license|licence|copyright)",
+  "urls": [
+    {
+      "id": "site",
+      "url": "https://termenbox.dev/"
+    },
+    {
+      "id": "download-host",
+      "url": "https://dl.termenbox.dev/health.txt"
+    },
+    {
+      "id": "product-repo",
+      "url": "https://github.com/termenbox/termenbox"
+    },
+    {
+      "id": "product-issue-forms",
+      "url": "https://github.com/termenbox/termenbox/issues/new/choose"
+    },
+    {
+      "id": "product-discussions",
+      "url": "https://github.com/termenbox/termenbox/discussions"
+    },
+    {
+      "id": "product-releases",
+      "url": "https://github.com/termenbox/termenbox/releases"
+    },
+    {
+      "id": "org-profile",
+      "url": "https://github.com/termenbox"
+    },
+    {
+      "id": "container-image",
+      "url": "https://github.com/orgs/termenbox/packages/container/package/termenbox"
+    }
+  ],
+  "sourceCalls": [
+    "repos/termenbox/termenbox/",
+    "GH_REPO: termenbox/termenbox$",
+    "termenbox/termenbox\\.git",
+    "SRC_REPO *= *\"termenbox/termenbox\""
+  ],
+  "sourceCallExclude": [
+    ".github/repo-structure.json",
+    "sweep/"
+  ],
+  "sourceCallAllow": [
+    {
+      "path": ".github/workflows/release-",
+      "contains": "GH_REPO: termenbox/termenbox"
+    },
+    {
+      "path": ".github/workflows/deploy-pages.yaml",
+      "contains": "GH_REPO: termenbox/termenbox"
+    }
+  ]
+}

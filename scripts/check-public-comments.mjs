@@ -17,6 +17,11 @@ for (const f of readdirSync(dir)) {
   flush();
 }
 // The release scripts are public too: their whole text (comments and docstrings alike) must name nothing internal.
+for (const f of readdirSync(new URL("../sweep/", import.meta.url)).filter((n) => n === "security-sweep.sh")) {
+  readFileSync(new URL(`../sweep/${f}`, import.meta.url), "utf8").split("\n").forEach((line, i) => {
+    if (INTERNAL.test(line)) { console.log(`sweep/${f}:${i + 1}: names something internal`); bad++; }
+  });
+}
 for (const f of readdirSync(tools)) {
   if (f === "__pycache__") continue;
   readFileSync(new URL(f, tools), "utf8").split("\n").forEach((line, i) => {

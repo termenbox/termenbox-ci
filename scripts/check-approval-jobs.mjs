@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 
 export const EXEMPT = new Set(["check-deploy-token-scope.yaml", "secret-check.yaml", "token-check.yaml"]);
-const PLAIN = /^(site|cloud|docs|smoke|nightly)$/;
+const PLAIN = /^(site|cloud|docs|smoke|nightly|security)$/;
 
 export function parseJobs(text) {
   const lines = text.split("\n");
