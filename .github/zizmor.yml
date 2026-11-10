@@ -1,0 +1,19 @@
+# Workflow linter policy. The gate fails on a high-severity finding; each ignore below
+# names the reason, and a new high finding is fixed or added here with a reason in the same change.
+rules:
+  dangerous-triggers:
+    ignore:
+      # issue_comment and workflow_run run the default branch's file; both gate their first step on the actor's
+      # permission or on the triggering run's conclusion and pass untrusted text only through env.
+      - docs-media-review.yaml
+      - release-nightly.yaml
+      - docs-media.yaml
+  unpinned-images:
+    ignore:
+      # The browser matrix runs in the CI image built by ci-image.yaml; digest pinning arrives with the image pull
+      # by digest.
+      - ci.yaml
+  github-env:
+    ignore:
+      # The value written is the repository variable plus a fixed suffix; both are validated by the case statements above it.
+      - action.yaml:35
