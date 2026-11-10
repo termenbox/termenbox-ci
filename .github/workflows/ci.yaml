@@ -1241,6 +1241,13 @@ jobs:
           BASE: ${{ github.event.client_payload.base }}
           HEAD: ${{ (github.event.client_payload.sha || inputs.sha) }}
         run: node scripts/check-commit-ids.mjs "$BASE" "$HEAD"
+      # The plan files: every roadmap step has its header and a done criterion, and every plan its header block with a
+      # roadmap row or a reason for none. Reads docs/plans only, no network.
+      - name: Check the roadmap steps and the plan headers
+        run: |
+          python3 docs/plans/roadmap/check.py
+          # A branch cut before index.py landed has no header blocks to check yet.
+          if [ -f docs/plans/roadmap/index.py ]; then python3 docs/plans/roadmap/index.py --check; fi
 
       - if: always()
         id: finish
