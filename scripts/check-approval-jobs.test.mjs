@@ -29,3 +29,11 @@ test("nightly, site and a workflow that is only called are left alone", () => {
   assert.deepEqual(approvalProblems(head + "  a:\n    environment: nightly\n  b:\n    environment: site\n"), []);
   assert.deepEqual(approvalProblems("on:\n  workflow_call:\n\njobs:\n  sign:\n    environment: ${{ inputs.channel }}\n"), []);
 });
+test("a job below a skippable job needs a status function", () => {
+  const skippable = "  approve:\n    if: ${{ x }}\n    environment: approve-beta\n  plan:\n    needs: approve\n    if: ${{ !cancelled() && (needs.approve.result == 'success' || needs.approve.result == 'skipped') }}\n";
+  const bad = approvalProblems(head + skippable + "  build:\n    needs: plan\n    if: needs.plan.outputs.run == 'true'\n");
+  assert.deepEqual(bad.map((x) => x[1]), ["build"]);
+  assert.deepEqual(approvalProblems(head + skippable + "  build:\n    needs: plan\n    if: ${{ !cancelled() && needs.plan.result == 'success' }}\n"), []);
+  const deep = approvalProblems(head + skippable + "  build:\n    needs: plan\n    if: ${{ !cancelled() }}\n  last:\n    needs: build\n    if: needs.build.result == 'success'\n");
+  assert.deepEqual(deep.map((x) => x[1]), ["last"]);
+});

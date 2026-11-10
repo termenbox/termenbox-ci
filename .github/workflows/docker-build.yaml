@@ -168,7 +168,9 @@ jobs:
   build:
     name: Build ${{ matrix.arch }}
     needs: plan
-    if: needs.plan.outputs.run == 'true'
+    # !cancelled() because the approve job above is skipped for a call from a release run, and a skipped ancestor
+    # would otherwise skip this job too.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.run == 'true' }}
     strategy:
       fail-fast: true
       matrix: ${{ fromJSON((github.event.client_payload.event || github.event_name) == 'pull_request' && '{"include":[{"arch":"amd64","runner":"ubuntu-latest"}]}' || '{"include":[{"arch":"amd64","runner":"ubuntu-latest"},{"arch":"arm64","runner":"ubuntu-24.04-arm"}]}') }}
@@ -255,7 +257,7 @@ jobs:
   # Joins the two single-architecture images into the multi-architecture tags users pull.
   manifest:
     name: Publish manifest
-    if: (github.event.client_payload.event || github.event_name) != 'pull_request' && needs.plan.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.build.result == 'success' && (github.event.client_payload.event || github.event_name) != 'pull_request' && needs.plan.outputs.run == 'true' }}
     needs: [plan, build]
     environment: ${{ needs.plan.outputs.channel }}
     runs-on: ubuntu-latest

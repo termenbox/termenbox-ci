@@ -34,6 +34,8 @@ export function parseJobs(text) {
     }
     j.needs = needs;
     j.usesSecret = /secrets\./.test(body);
+    const cond = /^    if:\s*(.+?)\s*$/m.exec(body);
+    j.if = cond ? cond[1] : "";
   }
   return jobs;
 }
@@ -47,6 +49,16 @@ export function approvalProblems(text) {
   const byName = new Map(jobs.map((j) => [j.name, j]));
   for (const j of jobs) if (isApproval(j) && j.usesSecret) out.push([j.line, j.name, "an approval job references a secret"]);
   const direct = /^\s{2}(repository_dispatch|workflow_dispatch|schedule|push|pull_request):/m.test(text.split(/^jobs:/m)[0]);
+  // A job that tolerates a skipped approval job (its `if` reads needs.approve.result == 'skipped') skips every job below it that has no status
+  // function in its own `if`, however far below: the default condition is success() of all ancestors.
+  const ancestors = (j, seen = new Set()) => {
+    for (const n of j.needs) { const d = byName.get(n); if (d && !seen.has(n)) { seen.add(n); ancestors(d, seen); } }
+    return [...seen].map((n) => byName.get(n));
+  };
+  for (const j of jobs) {
+    if (!ancestors(j).some((a) => /needs\.approve\.result == 'skipped'/.test(a.if))) continue;
+    if (!/(!cancelled\(\)|always\(\))/.test(j.if)) out.push([j.line, j.name, "sits below a job that may be skipped but its condition has no !cancelled()"]);
+  }
   if (!direct) return out;
   const reaches = (j, seen = new Set()) => j.needs.some((n) => {
     const d = byName.get(n);
