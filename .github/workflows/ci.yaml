@@ -803,6 +803,8 @@ jobs:
           for wait in 0 10 30; do
             sleep "$wait"
             if sudo apt-get update && sudo apt-get install -y musl-tools cmake; then ok=1; break; fi
+            # The runner's own mirror did not answer: ask the main Ubuntu archive for the next try.
+            sudo sed -i 's#mirror+file:/etc/apt/apt-mirrors.txt#http://archive.ubuntu.com/ubuntu/#; s#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
           done
           [ "$ok" = 1 ]
           mkdir -p ~/apt-debs
@@ -988,6 +990,8 @@ jobs:
           for wait in 0 10 30; do
             sleep "$wait"
             if sudo apt-get update && sudo apt-get install -y musl-tools bison; then ok=1; break; fi
+            # The runner's own mirror did not answer: ask the main Ubuntu archive for the next try.
+            sudo sed -i 's#mirror+file:/etc/apt/apt-mirrors.txt#http://archive.ubuntu.com/ubuntu/#; s#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
           done
           [ "$ok" = 1 ]
           mkdir -p ~/apt-debs
