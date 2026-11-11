@@ -39,6 +39,17 @@ class CheckSums(unittest.TestCase):
         (self.dir / "install.sh").write_bytes(b"other")
         self.refused(text)
 
+    def test_the_checked_scripts_are_optional_but_not_unchecked(self):
+        scripts = ("install-verified.sh", "uninstall-verified.sh")
+        self.names += list(scripts)
+        for n in scripts:
+            (self.dir / n).write_bytes(n.encode())
+        check_sums.check(self.sums(), self.dir, self.manifest)
+        check_sums.check(self.sums([n for n in self.names if n not in scripts]), self.dir, self.manifest)
+        text = self.sums()
+        (self.dir / "install-verified.sh").write_bytes(b"changed")
+        self.refused(text)
+
     def test_an_extra_missing_or_repeated_name_is_refused(self):
         self.refused(self.sums() + "0" * 64 + "  evil.sh\n")
         self.refused(self.sums([n for n in self.names if n != "NOTICES"]))
