@@ -1,0 +1,152 @@
+name: Publish the wiki
+run-name: "Publish the wiki · ${{ github.event.workflow_run.display_title || inputs.tag }}"
+
+# After a stable release has been published, builds the documentation of that release (the pages of docs/docs-nav.json) as the
+# wiki/ folder and commits it to the main branch of the public product repo. The release is the one named by its tag vX.Y.Z:
+# the tag, the server crate and the version on every docs page must agree (check-release.mjs) or nothing is written. The run
+# waits for the same one review as a release (approve-stable) because it writes to a public repo. Writing is off until the
+# repository variable WIKI_PUBLISH is `true`; a run by hand is a dry run unless it says otherwise.
+
+on:
+  workflow_run:
+    workflows: ['Release (stable)']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Stable release tag vX.Y.Z whose documentation to build'
+        required: true
+      dry_run:
+        description: 'Build and check only; true writes nothing to the public repo'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: quiet {0}
+
+concurrency:
+  group: publish-wiki
+  cancel-in-progress: false
+
+jobs:
+  # The one review of this run. It holds no secret and runs no code (scripts/check-approval-jobs.mjs).
+  approve:
+    name: Approve
+    # a finished stable release started by the Worker; a beta or a nightly carries a dash in its tag, a dry run of the release is not a release
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'repository_dispatch' && !contains(github.event.workflow_run.display_title, '-'))
+    runs-on: ubuntu-latest
+    environment: approve-stable
+    steps:
+      - shell: bash
+        run: echo "approved"
+
+  wiki:
+    name: Build, check and publish
+    needs: approve
+    environment: stable
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+
+      # The tag comes from the title of the release run ("Release (stable) · v0.1.59 · <commit>") or from the input; it is
+      # checked to be exactly vX.Y.Z before anything uses it, and the commit it names is read from the source repo, not taken
+      # from the run.
+      - name: Find the release commit
+        id: rel
+        shell: bash
+        env:
+          TITLE: ${{ github.event.workflow_run.display_title }}
+          GIVEN: ${{ inputs.tag }}
+          TOKEN: ${{ secrets.SOURCE_TOKEN }}
+        run: |
+          set +x
+          tag="$GIVEN"
+          [ -n "$tag" ] || tag=$(printf '%s' "$TITLE" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+( |$)' | head -1 | tr -d ' ' || true)
+          printf '%s' "$tag" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' || { echo "not a stable release tag: '$tag'"; exit 1; }
+          url="https://x-access-token:${TOKEN}@github.com/termenbox/termenbox-source.git"
+          refs=$(git ls-remote "$url" "refs/tags/${tag}^{}" "refs/tags/${tag}" 2>/dev/null || true)
+          # an annotated tag lists its commit on the peeled line; a lightweight tag has only the plain one
+          sha=$(printf '%s\n' "$refs" | awk '$2 ~ /\^\{\}$/ {print $1}' | head -1)
+          [ -n "$sha" ] || sha=$(printf '%s\n' "$refs" | awk 'NF {print $1}' | head -1)
+          printf '%s' "$sha" | grep -qE '^[0-9a-f]{40}$' || { echo "the source repo has no tag $tag"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        with:
+          sha: ${{ steps.rel.outputs.sha }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+
+      - name: Check that the tag, the crate and the pages agree
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          node scripts/check-release.mjs --tag "$TAG"
+          node scripts/docs-gen.mjs --check
+          node scripts/check-commands.mjs
+          node scripts/check-public-pages.mjs
+          node scripts/docs-wiki.mjs --verify
+          node scripts/build-site.mjs --version "$TAG" --out site-dist
+          node scripts/check-release.mjs --tag "$TAG" --dist site-dist
+
+      - name: Build the wiki
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          node scripts/docs-wiki.mjs --out out --version "$TAG"
+          node scripts/check-public-pages.mjs --dist out/wiki
+          node scripts/check-commands.mjs --dist out/wiki
+
+      - name: Commit it to the public repo
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+          EVENT: ${{ github.event_name }}
+          DRY: ${{ inputs.dry_run }}
+          SWITCH: ${{ vars.WIKI_PUBLISH }}
+          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+        run: |
+          set +x
+          publish=false
+          if [ "$EVENT" = workflow_dispatch ]; then [ "$DRY" = false ] && publish=true
+          else [ "$SWITCH" = true ] && publish=true; fi
+          if [ "$publish" != true ]; then
+            echo "Dry run: the wiki of $TAG is built and checked; nothing is written (set WIKI_PUBLISH=true, or run by hand with dry_run false)."
+            find out/wiki -type f | wc -l
+            exit 0
+          fi
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$MIRROR_TOKEN" | base64 -w0)"
+          git -c http.extraheader="$auth" clone -q --depth 1 --branch main https://github.com/termenbox/termenbox.git pub
+          cd pub
+          rm -rf wiki
+          cp -r ../out/wiki wiki
+          git add -A wiki
+          if git diff --cached --quiet; then echo "wiki/ is already current for $TAG"; exit 0; fi
+          git diff --cached --stat | tail -5
+          git -c user.name="Termenbox CI" -c user.email="ci@termenbox.dev" commit -q -m "docs(wiki): documentation of $TAG" -m "Built from the pages of the $TAG release."
+          git -c http.extraheader="$auth" push -q origin HEAD:main
+          echo "Wrote wiki/ for $TAG to the main branch of termenbox/termenbox"
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: wiki-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.MIRROR_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
