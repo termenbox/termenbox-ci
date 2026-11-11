@@ -803,8 +803,11 @@ jobs:
           for wait in 0 10 30; do
             sleep "$wait"
             if sudo apt-get update && sudo apt-get install -y musl-tools cmake; then ok=1; break; fi
-            # The runner's own mirror did not answer: ask the main Ubuntu archive for the next try.
-            sudo sed -i 's#mirror+file:/etc/apt/apt-mirrors.txt#http://archive.ubuntu.com/ubuntu/#; s#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
+            # No Ubuntu host answered (the whole ubuntu.com zone can be down): take the next try from a mirror under
+            # another name. apt still checks the signed Release files, so the host adds no trust.
+            base=https://mirror.us.leaseweb.net/ubuntu/
+            [ "$(dpkg --print-architecture)" = amd64 ] || base=https://mirror.us.leaseweb.net/ubuntu-ports/
+            sudo sed -i -E "s#(mirror\+file:/etc/apt/apt-mirrors\.txt|https?://[a-z0-9.-]*ubuntu\.com/ubuntu(-ports)?/)#$base#g" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
           done
           [ "$ok" = 1 ]
           mkdir -p ~/apt-debs
@@ -990,8 +993,11 @@ jobs:
           for wait in 0 10 30; do
             sleep "$wait"
             if sudo apt-get update && sudo apt-get install -y musl-tools bison; then ok=1; break; fi
-            # The runner's own mirror did not answer: ask the main Ubuntu archive for the next try.
-            sudo sed -i 's#mirror+file:/etc/apt/apt-mirrors.txt#http://archive.ubuntu.com/ubuntu/#; s#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
+            # No Ubuntu host answered (the whole ubuntu.com zone can be down): take the next try from a mirror under
+            # another name. apt still checks the signed Release files, so the host adds no trust.
+            base=https://mirror.us.leaseweb.net/ubuntu/
+            [ "$(dpkg --print-architecture)" = amd64 ] || base=https://mirror.us.leaseweb.net/ubuntu-ports/
+            sudo sed -i -E "s#(mirror\+file:/etc/apt/apt-mirrors\.txt|https?://[a-z0-9.-]*ubuntu\.com/ubuntu(-ports)?/)#$base#g" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
           done
           [ "$ok" = 1 ]
           mkdir -p ~/apt-debs
