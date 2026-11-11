@@ -205,6 +205,19 @@ jobs:
       - name: Check the landing site (metadata, structured data, assets, the install command)
         run: node scripts/check-site.mjs
 
+      - name: Check the docs (generated blocks, install commands, the wiki build, links, drift)
+        run: |
+          node scripts/docs-gen.mjs --self-test
+          node scripts/check-commands.mjs --self-test
+          node scripts/check-release.mjs --self-test
+          node scripts/docs-wiki.mjs --self-test
+          node scripts/docs-media-stale.mjs --self-test
+          node scripts/docs-sync.mjs --self-test
+          node scripts/docs-sync.mjs --check
+          node scripts/build-site.mjs
+          node scripts/check-commands.mjs --dist site-dist
+          node scripts/check-public-pages.mjs --dist site-dist
+
       - name: Test the docs-media scripts (review rules, review page, embed markers, input hash)
         run: |
           node --test scripts/docs-media-review.test.mjs
