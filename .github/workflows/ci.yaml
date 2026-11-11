@@ -782,8 +782,45 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.target }}
 
+      - name: Name the apt cache
+        id: apt-key
+        run: echo "key=apt-static-${{ matrix.arch }}-${ImageVersion:-0}-musl-tools-cmake" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the apt packages
+        id: apt
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-debs
+          key: ${{ steps.apt-key.outputs.key }}
+
       - name: Install the musl toolchain (aws-lc-rs compiles C code)
-        run: sudo apt-get update && sudo apt-get install -y musl-tools cmake
+        id: apt-install
+        if: steps.apt.outputs.cache-hit != 'true'
+        run: |
+          # The packages come from the cache when it has them, so a run does not depend on the Ubuntu mirrors; a
+          # miss installs them (retrying a mirror that does not answer) and keeps the downloaded .deb files.
+          ok=0
+          for wait in 0 10 30; do
+            sleep "$wait"
+            if sudo apt-get update && sudo apt-get install -y musl-tools cmake; then ok=1; break; fi
+          done
+          [ "$ok" = 1 ]
+          mkdir -p ~/apt-debs
+          if ls /var/cache/apt/archives/*.deb >/dev/null 2>&1; then
+            cp /var/cache/apt/archives/*.deb ~/apt-debs/
+            echo "saved=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install the cached apt packages
+        if: steps.apt.outputs.cache-hit == 'true'
+        run: sudo dpkg -i ~/apt-debs/*.deb
+
+      - name: Save the apt packages
+        if: github.event.client_payload.event == 'push' && steps.apt-install.outputs.saved == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-debs
+          key: ${{ steps.apt-key.outputs.key }}
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
@@ -928,9 +965,47 @@ jobs:
           path: tmux-out
           key: tmux-${{ matrix.arch }}-${{ hashFiles('.github/scripts/build-tmux.sh') }}
 
-      - name: Install the musl toolchain
+      - name: Name the apt cache
         if: steps.cache.outputs.cache-hit != 'true'
-        run: sudo apt-get update && sudo apt-get install -y musl-tools bison
+        id: apt-key
+        run: echo "key=apt-tmux-${{ matrix.arch }}-${ImageVersion:-0}-musl-tools-bison" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the apt packages
+        if: steps.cache.outputs.cache-hit != 'true'
+        id: apt
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-debs
+          key: ${{ steps.apt-key.outputs.key }}
+
+      - name: Install the musl toolchain
+        id: apt-install
+        if: (steps.cache.outputs.cache-hit != 'true') && steps.apt.outputs.cache-hit != 'true'
+        run: |
+          # The packages come from the cache when it has them, so a run does not depend on the Ubuntu mirrors; a
+          # miss installs them (retrying a mirror that does not answer) and keeps the downloaded .deb files.
+          ok=0
+          for wait in 0 10 30; do
+            sleep "$wait"
+            if sudo apt-get update && sudo apt-get install -y musl-tools bison; then ok=1; break; fi
+          done
+          [ "$ok" = 1 ]
+          mkdir -p ~/apt-debs
+          if ls /var/cache/apt/archives/*.deb >/dev/null 2>&1; then
+            cp /var/cache/apt/archives/*.deb ~/apt-debs/
+            echo "saved=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install the cached apt packages
+        if: (steps.cache.outputs.cache-hit != 'true') && steps.apt.outputs.cache-hit == 'true'
+        run: sudo dpkg -i ~/apt-debs/*.deb
+
+      - name: Save the apt packages
+        if: github.event.client_payload.event == 'push' && steps.apt-install.outputs.saved == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-debs
+          key: ${{ steps.apt-key.outputs.key }}
 
       - name: Build
         if: steps.cache.outputs.cache-hit != 'true'
@@ -1283,6 +1358,9 @@ jobs:
         run: |
           for g in rust-lint rust-ci rust-test static-x86_64 static-aarch64; do
             .github/scripts/prune-caches.sh "v0-rust-$g-" 1
+          done
+          for g in static-x86_64 static-aarch64 tmux-x86_64 tmux-aarch64; do
+            .github/scripts/prune-caches.sh "apt-$g-" 1
           done
           .github/scripts/prune-caches.sh node-cache- 2
           .github/scripts/prune-caches.sh codeql-overlay-base-database- 2
