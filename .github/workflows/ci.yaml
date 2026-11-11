@@ -821,7 +821,8 @@ jobs:
         run: sudo dpkg -i ~/apt-debs/*.deb
 
       - name: Save the apt packages
-        if: github.event.client_payload.event == 'push' && steps.apt-install.outputs.saved == 'true'
+        # Like this job's Rust cache: a pull request only restores, and the job does not run on a push at all.
+        if: (github.event.client_payload.event == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && steps.apt-install.outputs.saved == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/apt-debs
