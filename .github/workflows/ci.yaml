@@ -1101,7 +1101,9 @@ jobs:
             -v "$PWD/.github/scripts/test-user-install.sh:/test-user.sh:ro" \
             ${{ matrix.image }}
           sleep 8
-          docker exec machine sh -c 'apt-get update -qq && apt-get install -y -qq curl openssh-client ca-certificates iproute2 >/dev/null'
+          # If the image's own Ubuntu hosts do not answer, install from a mirror under another name (apt still checks
+          # the signed Release files). Debian images have no ubuntu.com source, so the rewrite leaves them alone.
+          docker exec machine sh -c 'apt-get update -qq; apt-get install -y -qq curl openssh-client ca-certificates iproute2 >/dev/null || { sed -i -E "s#https?://[a-z0-9.-]*ubuntu\.com/ubuntu/#http://mirror.us.leaseweb.net/ubuntu/#g" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; apt-get update -qq && apt-get install -y -qq curl openssh-client ca-certificates iproute2 >/dev/null; }'
 
       - name: Install, update, roll back, handle requests, refuse tampering, revert
         # host-me needs no root: it is tested as a normal user in a machine of its own, by its own script.
@@ -1159,7 +1161,9 @@ jobs:
             -v "$PWD/packages/client/installer/install.sh:/install.sh:ro" -v "$PWD/packages/client/public/uninstall.sh:/uninstall.sh:ro" \
             -v "$PWD/release/termenbox-server:/server:ro" jrei/systemd-debian:12
           sleep 8
-          docker exec machine sh -c 'apt-get update -qq && apt-get install -y -qq curl openssh-client ca-certificates iproute2 python3 >/dev/null'
+          # If the image's own Ubuntu hosts do not answer, install from a mirror under another name (apt still checks
+          # the signed Release files). Debian images have no ubuntu.com source, so the rewrite leaves them alone.
+          docker exec machine sh -c 'apt-get update -qq; apt-get install -y -qq curl openssh-client ca-certificates iproute2 python3 >/dev/null || { sed -i -E "s#https?://[a-z0-9.-]*ubuntu\.com/ubuntu/#http://mirror.us.leaseweb.net/ubuntu/#g" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; apt-get update -qq && apt-get install -y -qq curl openssh-client ca-certificates iproute2 python3 >/dev/null; }'
 
       - name: Install, update by digest, roll back an unhealthy image, uninstall
         run: docker exec -e DOCKER_HOST=unix:///docker.sock machine sh /scripts/test-container-install.sh /server "$RUNNER_TEMP/work"
