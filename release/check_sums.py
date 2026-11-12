@@ -4,8 +4,9 @@
 usage: check_sums.py SHA256SUMS DIR MANIFEST
 
 The job that signs SHA256SUMS runs this first. The file was written by a job that ran the source's code, so nothing
-in it is trusted: the names are a fixed set (install.sh and the two checked scripts the docs link are optional, so this file can land before the workflow that makes them), every hash is recomputed from the file in DIR,
-and the line for manifest.json is the hash of MANIFEST, the manifest the signing job signed.
+in it is trusted: the names are a fixed set (install.sh and the two checked scripts the docs link are optional, so this
+file can land before the workflow that makes them), every hash is recomputed from the file in DIR, and the line for
+manifest.json is the hash of MANIFEST, the manifest the signing job signed.
 """
 import hashlib
 import re
