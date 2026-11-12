@@ -20,6 +20,7 @@
 #   SWEEP_CI_BYTES  live artifact bytes the ci-storage check allows, default 2000000000; SWEEP_CACHE_BYTES the cache bytes, default 7000000000
 #   SWEEP_MANIFEST_WARN_DAYS  age in days from which a channel's signed manifest fails the manifest-age check, default 60
 #                  (the installer and the updater refuse one older than 90, so this leaves 30 days to sign it again)
+#   SWEEP_CI_IMAGE_DAYS  age in days of the CI image ci.yaml pins, once a newer build exists, from which ci-image-age fails, default 60
 #   SWEEP_STATE    file holding the last seen manifest versions (`channel version` lines), read and rewritten by the manifest check
 set -u
 cd "$(dirname "$0")/.."
@@ -48,6 +49,7 @@ dl-no-listing${tab}sh sweep/security-sweep.sh --dl-listing
 manifest-forward${tab}sh sweep/security-sweep.sh --manifest-forward
 manifest-age${tab}sh sweep/security-sweep.sh --manifest-age
 ci-storage${tab}sh sweep/security-sweep.sh --ci-storage
+ci-image-age${tab}node sweep/check-ci-image-age.mjs
 EOF
 }
 

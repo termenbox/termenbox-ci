@@ -576,7 +576,8 @@ jobs:
   # CI image (docker/Dockerfile.ci, .github/workflows/ci-image.yaml); the matrix jobs start from it
   # so `playwright-core install --with-deps` — which used to stall on azure.archive.ubuntu.com — no
   # longer runs at all. Chromium is the runner's Chrome, so the chromium leg stays on the bare
-  # runner and skips the container.
+  # runner and skips the container. The image is pulled by digest; the weekly ci-image run says on the
+  # `CI failures` issue when a new build has a new digest, and the next change here bumps both lines.
   browsers:
     name: Browser matrix (${{ matrix.engine }}, ${{ matrix.runs }})
     needs: changes
@@ -587,7 +588,7 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.changes.outputs.browsers_matrix) }}
-    container: ${{ matrix.engine != 'chromium' && 'ghcr.io/termenbox/termenbox-ci:latest' || '' }}
+    container: ${{ matrix.engine != 'chromium' && 'ghcr.io/termenbox/termenbox-ci@sha256:287b70e63f7ff1f8b5e44e2402034c0f736ad9bd0d5f81e5411aa51fefd18c6a' || '' }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
@@ -682,7 +683,7 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.changes.outputs.real_matrix) }}
-    container: ${{ matrix.engine != 'chromium' && 'ghcr.io/termenbox/termenbox-ci:latest' || '' }}
+    container: ${{ matrix.engine != 'chromium' && 'ghcr.io/termenbox/termenbox-ci@sha256:287b70e63f7ff1f8b5e44e2402034c0f736ad9bd0d5f81e5411aa51fefd18c6a' || '' }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
