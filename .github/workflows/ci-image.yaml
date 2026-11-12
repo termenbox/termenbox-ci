@@ -80,6 +80,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        id: push
         env:
           BUILDKIT_PROGRESS: quiet
         with:
@@ -89,6 +90,31 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.run_id }}
+
+      # ci.yaml pulls this image by digest. This run cannot change ci.yaml (only the owner opens a branch here), so when the
+      # new digest is not the one ci.yaml pins, it posts that digest, and nothing else, to the rolling `CI failures` issue;
+      # the next change to ci.yaml bumps both container lines. The monthly sweep's ci-image-age fails a bump left 60 days.
+      - name: Say when the digest moved
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LOG_TOKEN: ${{ secrets.LOG_TOKEN }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          case "$DIGEST" in sha256:*) ;; *) exit 1 ;; esac
+          [ "${#DIGEST}" -eq 71 ] && [ -z "$(printf '%s' "${DIGEST#sha256:}" | tr -d 0-9a-f)" ] || exit 1
+          pins="$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows/ci.yaml?ref=main" -H 'Accept: application/vnd.github.raw' \
+            | grep -o 'termenbox-ci@sha256:[0-9a-f]\{64\}' | sed 's/.*@//' | sort -u)" || exit 1
+          [ "$pins" = "$DIGEST" ] && exit 0
+          [ -n "$LOG_TOKEN" ] || exit 1
+          export GH_TOKEN="$LOG_TOKEN" GH_REPO=termenbox/termenbox-source
+          n="$(gh issue list --label ci-failure --state open --search '"CI failures" in:title' --json number,title --jq '[.[] | select(.title == "CI failures")][0].number // empty')" || exit 1
+          if [ -z "$n" ]; then
+            gh label create ci-failure --color B60205 --description "A job of the ci repo failed" >/dev/null 2>&1 || true
+            url="$(gh issue create --title "CI failures" --label ci-failure --body "Rolling log of failed ci-repo jobs: one comment per failure, scrubbed. Written by termenbox-ci .github/actions/finish.")" && n="${url##*/}"
+          fi
+          [ -n "$n" ] && gh issue comment "$n" --body "ci-image moved: $IMAGE@$DIGEST" >/dev/null
 
       - if: always()
         id: finish
