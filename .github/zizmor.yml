@@ -8,11 +8,6 @@ rules:
       - docs-media-review.yaml
       - release-nightly.yaml
       - docs-media.yaml
-  unpinned-images:
-    ignore:
-      # The browser matrix runs in the CI image built by ci-image.yaml; digest pinning arrives with the image pull
-      # by digest.
-      - ci.yaml
   github-env:
     ignore:
       # The value written is the repository variable plus a fixed suffix; both are validated by the case statements above it.

@@ -45,9 +45,9 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@c793fdd572460ac87af14956e6676e4c1dac25f6
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@c793fdd572460ac87af14956e6676e4c1dac25f6
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
@@ -143,7 +143,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        uses: termenbox/termenbox-ci/.github/actions/finish@c793fdd572460ac87af14956e6676e4c1dac25f6
         with:
           key: ${{ secrets.LOG_KEY }}
           name: terraform-${{ strategy.job-index }}

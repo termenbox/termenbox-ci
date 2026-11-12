@@ -13,6 +13,19 @@ Termenbox source and are not edited in this repository.
 - Signed releases are published at [github.com/termenbox/termenbox](https://github.com/termenbox/termenbox) and on the
   download domain. Each release carries a signed manifest that the installer verifies.
 
+## Shared actions
+
+The workflows call the actions under `.github/actions/` (and, through `release-tools`, the scripts under `release/`)
+by a full commit of this repository, and every such reference names the same commit. After a change to
+`.github/actions/` or `release/` merges, the next commit runs the bump with the merge commit:
+
+```sh
+node scripts/bump-self-refs.mjs <commit of main>
+```
+
+`repo-checks` runs `scripts/check-self-refs.mjs`, which fails when two references name different commits or when the
+commit is not on `main`.
+
 ## Questions and problems
 
 Ask in the [product repository](https://github.com/termenbox/termenbox). Issues and discussions are switched off here.
