@@ -1,0 +1,38 @@
+name: apt-cached
+description: Installs apt packages from .deb files kept in the Actions cache, so a mirror outage costs a cold cache and not a red job. A miss installs with apt-get (retrying, then through another mirror) and keeps the downloaded files; with save set, the files are saved for the next run.
+inputs:
+  packages:
+    description: Space-separated package names.
+    required: true
+  group:
+    description: Name of the job group; part of the cache key and of the prune group in ci.yaml (apt-GROUP-ARCH-).
+    required: true
+  save:
+    description: "'true' on the runs allowed to write the cache (pushes and the daily run), else restore only."
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Name the apt cache
+      id: key
+      shell: sh
+      run: sh "$GITHUB_ACTION_PATH/apt-cached.sh" key "${{ inputs.group }}" "${{ inputs.packages }}"
+
+    - name: Restore the apt packages
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/apt-debs
+        key: ${{ steps.key.outputs.key }}
+
+    - name: Install the apt packages
+      id: install
+      shell: sh
+      run: sh "$GITHUB_ACTION_PATH/apt-cached.sh" install "${{ inputs.packages }}" "${{ steps.restore.outputs.cache-hit }}"
+
+    - name: Save the apt packages
+      if: inputs.save == 'true' && steps.install.outputs.saved == 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/apt-debs
+        key: ${{ steps.key.outputs.key }}
