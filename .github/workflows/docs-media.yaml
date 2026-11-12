@@ -3,7 +3,8 @@ name: Docs Media
 # Renders the documentation videos on scripted data, puts them on a Pages preview and opens a review issue for the
 # owner. It runs by hand (GitHub lets only people with write access run it) and at every stable release tag, where it renders
 # the videos whose inputs changed since they were approved (scripts/docs-media-stale.mjs) and renders nothing when none did.
-# Nothing is published by this workflow: the owner approves in the review issue. Never a pull-request-triggered run with
+# Nothing is published by this workflow: the owner approves in the review issue. The job that runs the source's code (render)
+# holds no Cloudflare or status token; the job that holds them (publish) has no checkout and runs none of the source's code. Never a pull-request-triggered run with
 # secrets. Inputs reach the steps through env, never spliced into a script. Replaces dialog-videos.yaml once the first
 # publication is approved (plan 7.2).
 on:
@@ -50,7 +51,7 @@ env:
 
 jobs:
   render:
-    name: Render, preview and open the review
+    name: Render
     # A tag event is a stable release only when the tag is vX.Y.Z: a beta or a nightly carries a suffix after a dash.
     if: github.event_name != 'repository_dispatch' || (startsWith(github.event.client_payload.tag, 'v') && !contains(github.event.client_payload.tag, '-'))
     environment: site
@@ -58,6 +59,7 @@ jobs:
     timeout-minutes: 45
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
+      go: ${{ steps.pick.outputs.go }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@c793fdd572460ac87af14956e6676e4c1dac25f6
 
@@ -176,35 +178,23 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-      - name: Install Wrangler
-        if: steps.pick.outputs.go == 'true'
-        run: npm install -g --ignore-scripts wrangler@4.158.0
-
-      # A preview deployment on its own branch alias, never production (the site deploys from master).
-      - name: Publish the preview
+      # The review body is written here, by the source's script, with no secret in this job; the job after it only posts it.
+      - name: Write the review body
         if: steps.pick.outputs.go == 'true'
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PROJECT: ${{ vars.TERMENBOX_SITE_PROJECT_NAME || 'termenbox-site' }}
           RUN_ID: ${{ github.run_id }}
         run: |
-          wrangler pages deploy media --project-name="$PROJECT" --branch="media-$RUN_ID"
-          echo "PREVIEW_URL=https://media-$RUN_ID.$PROJECT.pages.dev" >> "$GITHUB_ENV"
+          mkdir review
+          PREVIEW_URL="https://media-$RUN_ID.$PROJECT.pages.dev" node scripts/docs-media-review-cli.mjs issue-body media > review/body.md
 
-      - name: Open the review issue
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: steps.pick.outputs.go == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
-          GH_REPO: termenbox/termenbox-source
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          node scripts/docs-media-review-cli.mjs issue-body media > "$RUNNER_TEMP/body.md"
-          gh label create docs-media --color 1d76db --description "Docs media review" 2>/dev/null || true
-          title="Docs media review $RUN_ID"
-          n=$(gh issue list --label docs-media --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
-          if [ -n "$n" ]; then gh issue edit "$n" --body-file "$RUNNER_TEMP/body.md"
-          else gh issue create --title "$title" --label docs-media --body-file "$RUNNER_TEMP/body.md"; fi
+        with:
+          name: docs-media-review-${{ github.run_id }}
+          path: review
+          retention-days: 7
+          if-no-files-found: error
 
       - if: always()
         id: finish
@@ -215,9 +205,70 @@ jobs:
           status: ${{ job.status }}
           log-token: ${{ secrets.LOG_TOKEN }}
           secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+
+  publish:
+    name: Preview and open the review
+    needs: render
+    if: needs.render.outputs.go == 'true'
+    environment: site
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@c793fdd572460ac87af14956e6676e4c1dac25f6
+
+      # No checkout and no source script: the videos and the review body are data made in the job before. Node is the runner's.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: docs-media-${{ github.run_id }}
+          path: media
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: docs-media-review-${{ github.run_id }}
+          path: review
+
+      - name: Install Wrangler
+        run: npm install -g --ignore-scripts wrangler@4.158.0
+
+      # A preview deployment on its own branch alias, never production (the site deploys from master).
+      - name: Publish the preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ vars.TERMENBOX_SITE_PROJECT_NAME || 'termenbox-site' }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          wrangler pages deploy media --project-name="$PROJECT" --branch="media-$RUN_ID"
+          echo "PREVIEW_URL=https://media-$RUN_ID.$PROJECT.pages.dev" >> "$GITHUB_ENV"
+
+      - name: Open the review issue
+        env:
+          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_REPO: termenbox/termenbox-source
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh label create docs-media --color 1d76db --description "Docs media review" 2>/dev/null || true
+          title="Docs media review $RUN_ID"
+          n=$(gh issue list --label docs-media --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then gh issue edit "$n" --body-file review/body.md
+          else gh issue create --title "$title" --label docs-media --body-file review/body.md; fi
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@c793fdd572460ac87af14956e6676e4c1dac25f6
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: publish-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
             ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             ${{ secrets.CLOUDFLARE_API_TOKEN }}
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.STATUS_TOKEN }}
