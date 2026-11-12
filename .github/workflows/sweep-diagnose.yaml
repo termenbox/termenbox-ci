@@ -30,9 +30,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@e737203677459b53d9f48012f376e46b2d809845
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@e737203677459b53d9f48012f376e46b2d809845
         with:
           path: source
           token: ${{ secrets.SOURCE_TOKEN }}
@@ -55,7 +55,7 @@ jobs:
           sh scripts/dev.sh --fuzz sh -c "cd packages/server && for t in \$(cargo +$NIGHTLY fuzz list); do echo \"== \$t\"; cargo +$NIGHTLY fuzz run \$t -- -max_total_time=60 || exit 1; done"
 
       - if: always()
-        uses: termenbox/termenbox-ci/.github/actions/finish@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        uses: termenbox/termenbox-ci/.github/actions/finish@e737203677459b53d9f48012f376e46b2d809845
         with:
           key: ${{ secrets.LOG_KEY }}
           name: diagnose

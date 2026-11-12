@@ -55,7 +55,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@e737203677459b53d9f48012f376e46b2d809845
         with:
           path: source
           token: ${{ secrets.SOURCE_TOKEN }}
