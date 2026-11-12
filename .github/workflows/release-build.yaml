@@ -741,7 +741,6 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
 
       - name: Build the client
         uses: ./.github/actions/build-client
