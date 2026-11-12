@@ -12,14 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@e737203677459b53d9f48012f376e46b2d809845
       - name: Resolve develop
         id: sha
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
         run: echo "sha=$(gh api repos/termenbox/termenbox-source/commits/develop -q .sha 2>/dev/null)" >> "$GITHUB_OUTPUT"
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@e737203677459b53d9f48012f376e46b2d809845
         with:
           sha: ${{ steps.sha.outputs.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
@@ -30,7 +30,7 @@ jobs:
           head -n 3 src/CLAUDE.md
           cargo --definitely-not-a-flag
       - if: always()
-        uses: termenbox/termenbox-ci/.github/actions/finish@bdbd793e55b6fc2bf0ca376be22060bef4e06622
+        uses: termenbox/termenbox-ci/.github/actions/finish@e737203677459b53d9f48012f376e46b2d809845
         with:
           key: ${{ secrets.LOG_KEY }}
           name: leak
