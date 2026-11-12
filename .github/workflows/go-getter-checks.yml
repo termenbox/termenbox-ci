@@ -35,6 +35,18 @@ jobs:
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@c793fdd572460ac87af14956e6676e4c1dac25f6
 
+      - if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          SHA: ${{ github.event.client_payload.sha }}
+          STATE: pending
+          DESC: running
+        run: |
+          [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
+          gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$STATE" -f context=go-getter \
+            -f description="$DESC" -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null 2>&1 || true
+
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@c793fdd572460ac87af14956e6676e4c1dac25f6
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
@@ -58,3 +70,15 @@ jobs:
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
+
+      - if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          SHA: ${{ github.event.client_payload.sha }}
+          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
+          DESC: ${{ steps.finish.outputs.summary || 'go-getter checks' }}
+        run: |
+          [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
+          gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$STATE" -f context=go-getter \
+            -f description="$DESC" -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null 2>&1 || true
