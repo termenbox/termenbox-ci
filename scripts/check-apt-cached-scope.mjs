@@ -4,7 +4,7 @@
 // Prints file and line only.
 import { readdirSync, readFileSync } from "node:fs";
 
-const PROTECTED = /^(release-.*|deploy-.*|publish-wiki|docs-media.*|security-sweep)\.ya?ml$/;
+const PROTECTED = /^(release-.*|deploy-.*|publish-wiki|docs-media.*|security-sweep|docker-build|base-image|ci-image|template-review|secret-check|check-deploy-token-scope|token-check)\.ya?ml$/;
 export function aptCachedProblems(name, text) {
   if (!PROTECTED.test(name)) return [];
   const problems = [];
