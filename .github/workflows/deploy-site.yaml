@@ -51,7 +51,8 @@ jobs:
           files=$(gh api "repos/termenbox/termenbox-source/compare/$BASE...$SHA" --jq '.files[].filename' 2>/dev/null) || yes
           for f in $files; do
             case "$f" in
-              packages/site/*|scripts/check-site.mjs|scripts/build-site.mjs|docs/course/*|docs/media/*|README.md) yes ;;
+            # What a deploy reads (siteInputs in scripts/build-site.mjs); the client job of ci.yaml fails when the two differ.
+              .github/repo-structure.json|README.md|SECURITY.md|docs/course/*|docs/docs-nav.json|docs/guide/*|docs/media/*|docs/recipes/*|docs/reference/*|packages/server/Cargo.toml|packages/site/*|scripts/build-site.mjs|scripts/check-docs.mjs|scripts/check-site.mjs|scripts/docs-media.mjs) yes ;;
             esac
           done
           echo run=false >> "$GITHUB_OUTPUT"
