@@ -485,9 +485,13 @@ jobs:
       # The licence texts and the two checked scripts (the docs link them as release assets) ship next to the binaries, and SHA256SUMS lets a second host be compared byte for byte.
       - name: Licence, notices and SHA256SUMS
         run: |
-          cp LICENSE NOTICES scripts/install-verified.sh scripts/uninstall-verified.sh dist/
+          cp LICENSE NOTICES dist/
+          # a tag cut from a commit before the scripts existed ships without them (check_sums.py lists them as optional)
           extra=""; [ ! -f dist/install.sh ] || extra="install.sh"
-          (cd dist && sha256sum termenbox-server-*-linux tmux-*-linux tmux-COPYING tmux-libevent-LICENSE tmux-ncurses-COPYING LICENSE NOTICES install-verified.sh uninstall-verified.sh $extra manifest.json manifest.json.sig > SHA256SUMS)
+          for s in install-verified.sh uninstall-verified.sh; do
+            if [ -f "scripts/$s" ]; then cp "scripts/$s" dist/; extra="$extra $s"; fi
+          done
+          (cd dist && sha256sum termenbox-server-*-linux tmux-*-linux tmux-COPYING tmux-libevent-LICENSE tmux-ncurses-COPYING LICENSE NOTICES $extra manifest.json manifest.json.sig > SHA256SUMS)
           cat dist/SHA256SUMS
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -668,8 +672,8 @@ jobs:
           if [ -n "$NOTES" ]; then body="${NOTES}"$'\n\n'"${body}"; fi
           files=(dist/termenbox-server-x86_64-linux dist/termenbox-server-aarch64-linux
             dist/tmux-x86_64-linux dist/tmux-aarch64-linux dist/tmux-COPYING dist/tmux-libevent-LICENSE dist/tmux-ncurses-COPYING
-            dist/LICENSE dist/NOTICES dist/install-verified.sh dist/uninstall-verified.sh dist/SHA256SUMS dist/manifest.json dist/manifest.json.sig)
-          [ ! -f dist/install.sh ] || files+=(dist/install.sh)
+            dist/LICENSE dist/NOTICES dist/SHA256SUMS dist/manifest.json dist/manifest.json.sig)
+          for f in install.sh install-verified.sh uninstall-verified.sh; do [ ! -f "dist/$f" ] || files+=("dist/$f"); done
           files+=(dist/SHA256SUMS.sig)
           if gh release view "$TAG" >/dev/null 2>&1; then
             # A run again after R2 succeeded and this step did not. The R2 step above has just found the published manifest

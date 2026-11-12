@@ -126,6 +126,7 @@ jobs:
             exit 0
           fi
           auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$MIRROR_TOKEN" | base64 -w0)"
+          echo "::add-mask::${auth#AUTHORIZATION: basic }"
           git -c http.extraheader="$auth" clone -q --depth 1 --branch main https://github.com/termenbox/termenbox.git pub
           cd pub
           rm -rf wiki
@@ -134,7 +135,11 @@ jobs:
           if git diff --cached --quiet; then echo "wiki/ is already current for $TAG"; exit 0; fi
           git diff --cached --stat | tail -5
           git -c user.name="Termenbox CI" -c user.email="ci@termenbox.dev" commit -q -m "docs(wiki): documentation of $TAG" -m "Built from the pages of the $TAG release."
-          git -c http.extraheader="$auth" push -q origin HEAD:main
+          # main of the public repo may have moved since the clone: take it again once and retry the push
+          git -c http.extraheader="$auth" push -q origin HEAD:main || {
+            git -c http.extraheader="$auth" -c user.name="Termenbox CI" -c user.email="ci@termenbox.dev" pull -q --rebase origin main
+            git -c http.extraheader="$auth" push -q origin HEAD:main
+          }
           echo "Wrote wiki/ for $TAG to the main branch of termenbox/termenbox"
 
       - if: always()

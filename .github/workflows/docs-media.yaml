@@ -100,8 +100,8 @@ jobs:
           node ../../scripts/docs-media.mjs cases --catalog "$RUNNER_TEMP/catalog.json" ../../README.md $(find ../../docs -name '*.md')
           # stale and stale-all name the videos whose inputs changed since they were rendered; the list is made here, not typed
           case "$CASE" in
-            stale) CASE=$(node ../../scripts/docs-media-stale.mjs --cases) ;;
-            stale-all) CASE=$(node ../../scripts/docs-media-stale.mjs --cases --all) ;;
+            stale) CASE=$(node ../../scripts/docs-media-stale.mjs --cases) || exit 1 ;;
+            stale-all) CASE=$(node ../../scripts/docs-media-stale.mjs --cases --all) || exit 1 ;;
           esac
           export CASE
           node -e '
