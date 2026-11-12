@@ -205,6 +205,24 @@ jobs:
       - name: Check the landing site (metadata, structured data, assets, the install command)
         run: node scripts/check-site.mjs
 
+      # The landing site deploys for exactly the paths it renders: the gate of deploy-site.yaml in this repo equals what the build reads.
+      - name: Read the deploy gate of the landing site
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: .ci-gate
+          persist-credentials: false
+          sparse-checkout: .github/workflows/deploy-site.yaml
+          sparse-checkout-cone-mode: false
+
+      - name: Check the landing site deploys for exactly the paths it renders
+        env:
+          TERMENBOX_CI_DIR: .ci-gate
+        run: |
+          if [ -f scripts/check-site-deploy-paths.mjs ]; then
+            node --test scripts/check-site-deploy-paths.test.mjs
+            node scripts/check-site-deploy-paths.mjs
+          fi
+
       - name: Test the docs-media scripts (review rules, review page, embed markers, input hash)
         run: |
           node --test scripts/docs-media-review.test.mjs
