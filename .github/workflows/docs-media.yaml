@@ -235,6 +235,14 @@ jobs:
       - name: Install Wrangler
         run: npm install -g --ignore-scripts wrangler@4.158.0
 
+      # The folder is data made by the source's scripts: Cloudflare Pages would run a worker or apply routing, header or redirect
+      # rules found in it, so only media and page files go out.
+      - name: Check the folder holds only media and page files
+        run: |
+          bad=$(find media ! -type d ! \( -iname '*.mp4' -o -iname '*.png' -o -iname '*.webm' -o -iname '*.jpg' -o -iname '*.html' -o -iname '*.css' -o -iname '*.json' -o -iname '*.vtt' -o -iname '*.svg' \) | head -5)
+          [ -z "$bad" ] || { echo "files that are not media or page files:"; echo "$bad"; exit 1; }
+          [ -z "$(find media -name '_*' -o -name '.*' ! -name .)" ] || { echo "the folder holds a Pages control file or a hidden path"; exit 1; }
+
       # A preview deployment on its own branch alias, never production (the site deploys from master).
       - name: Publish the preview
         env:
@@ -244,7 +252,6 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: |
           wrangler pages deploy media --project-name="$PROJECT" --branch="media-$RUN_ID"
-          echo "PREVIEW_URL=https://media-$RUN_ID.$PROJECT.pages.dev" >> "$GITHUB_ENV"
 
       - name: Open the review issue
         env:

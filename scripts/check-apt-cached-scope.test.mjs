@@ -8,6 +8,9 @@ test("a release workflow may not use apt-cached", () => {
   assert.equal(aptCachedProblems("publish-wiki.yaml", USES).length, 1);
   assert.equal(aptCachedProblems("deploy-site.yaml", USES).length, 1);
 });
+test("an image or secret-holding workflow may not either", () => {
+  for (const f of ["docker-build.yaml", "base-image.yaml", "ci-image.yaml", "template-review.yaml", "secret-check.yaml"]) assert.equal(aptCachedProblems(f, USES).length, 1, f);
+});
 test("a test workflow may", () => {
   assert.deepEqual(aptCachedProblems("ci.yaml", USES), []);
 });
