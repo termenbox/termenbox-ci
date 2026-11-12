@@ -1,15 +1,20 @@
 name: Docs Media
 
 # Renders the documentation videos on scripted data, puts them on a Pages preview and opens a review issue for the
-# owner. Dispatch only (GitHub lets only people with write access run it); never a pull-request-triggered run with secrets. Inputs reach the
-# steps through env, never spliced into a script. Replaces dialog-videos.yaml once the first publication is approved (plan 7.2).
+# owner. It runs by hand (GitHub lets only people with write access run it) and at every stable release tag, where it renders
+# the videos whose inputs changed since they were approved (scripts/docs-media-stale.mjs) and renders nothing when none did.
+# Nothing is published by this workflow: the owner approves in the review issue. Never a pull-request-triggered run with
+# secrets. Inputs reach the steps through env, never spliced into a script. Replaces dialog-videos.yaml once the first
+# publication is approved (plan 7.2).
 on:
+  repository_dispatch:
+    types: [source-tag]
   workflow_dispatch:
     inputs:
       case:
-        description: all, or one case id from `render.mjs --list`
+        description: all, stale (the videos whose inputs changed), stale-all (those and the ones that moved only by version), or case ids from `render.mjs --list`, separated by spaces
         type: string
-        default: all
+        default: stale
       profile:
         description: Which screen
         type: choice
@@ -46,15 +51,17 @@ env:
 jobs:
   render:
     name: Render, preview and open the review
+    # A tag event is a stable release only when the tag is vX.Y.Z: a beta or a nightly carries a suffix after a dash.
+    if: github.event_name != 'repository_dispatch' || (startsWith(github.event.client_payload.tag, 'v') && !contains(github.event.client_payload.tag, '-'))
     environment: site
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@e737203677459b53d9f48012f376e46b2d809845
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@c793fdd572460ac87af14956e6676e4c1dac25f6
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@e737203677459b53d9f48012f376e46b2d809845
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@c793fdd572460ac87af14956e6676e4c1dac25f6
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
@@ -85,19 +92,33 @@ jobs:
         id: pick
         working-directory: packages/client
         env:
-          CASE: ${{ inputs.case }}
-          PROFILE: ${{ inputs.profile }}
+          CASE: ${{ inputs.case || 'stale' }}
+          PROFILE: ${{ inputs.profile || 'both' }}
         run: |
           node e2e/video/render.mjs --list --json > "$RUNNER_TEMP/catalog.json"
           # a marker that was deleted or renamed would leave the video out of its page without a word
           node ../../scripts/docs-media.mjs cases --catalog "$RUNNER_TEMP/catalog.json" ../../README.md $(find ../../docs -name '*.md')
+          # stale and stale-all name the videos whose inputs changed since they were rendered; the list is made here, not typed
+          case "$CASE" in
+            stale) CASE=$(node ../../scripts/docs-media-stale.mjs --cases) || exit 1 ;;
+            stale-all) CASE=$(node ../../scripts/docs-media-stale.mjs --cases --all) || exit 1 ;;
+          esac
+          export CASE
           node -e '
             const rows = JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/catalog.json", "utf8"));
-            const want = process.env.CASE;
-            const pick = want === "all" ? rows.filter((r) => !r.template) : rows.filter((r) => r.id === want);
-            if (!pick.length) { console.error("unknown case; choose all or one of: " + rows.map((r) => r.id).join(" ")); process.exit(1); }
-            const profiles = process.env.PROFILE === "both" ? "phone desktop" : process.env.PROFILE;
-            const out = [`cases=${pick.map((r) => r.id).join(" ")}`, `profiles=${profiles}`, `real=${pick.some((r) => r.real)}`];
+            const want = process.env.CASE.trim();
+            const out = [];
+            if (!want) {
+              console.log("No video is stale: nothing to render.");
+              out.push("go=false", "cases=", "profiles=", "real=false");
+            } else {
+              const ids = want.split(/\s+/);
+              const pick = want === "all" ? rows.filter((r) => !r.template) : rows.filter((r) => ids.includes(r.id));
+              const unknown = want === "all" ? [] : ids.filter((i) => !rows.some((r) => r.id === i));
+              if (!pick.length || unknown.length) { console.error("unknown case " + unknown.join(" ") + "; choose all, stale, stale-all or case ids from: " + rows.map((r) => r.id).join(" ")); process.exit(1); }
+              const profiles = process.env.PROFILE === "both" ? "phone desktop" : process.env.PROFILE;
+              out.push("go=true", `cases=${pick.map((r) => r.id).join(" ")}`, `profiles=${profiles}`, `real=${pick.some((r) => r.real)}`);
+            }
             require("fs").appendFileSync(process.env.GITHUB_OUTPUT, out.join("\n") + "\n");
           '
 
@@ -119,13 +140,14 @@ jobs:
         run: cargo build --profile ci -p termenbox-server
 
       - name: Render
+        if: steps.pick.outputs.go == 'true'
         working-directory: packages/client
         env:
           CASES: ${{ steps.pick.outputs.cases }}
           PROFILES: ${{ steps.pick.outputs.profiles }}
-          PACE: ${{ inputs.pace }}
-          CAPTION: ${{ inputs.caption }}
-          VOICE: ${{ inputs.voice }}
+          PACE: ${{ inputs.pace || 'normal' }}
+          CAPTION: ${{ inputs.caption || 'on' }}
+          VOICE: ${{ inputs.voice || 'on' }}
           TERMENBOX_BIN: ${{ github.workspace }}/target/ci/termenbox-server
         run: |
           flags="--pace $PACE --skip-unsupported"; [ "$CAPTION" = off ] && flags="$flags --no-caption"
@@ -143,9 +165,11 @@ jobs:
           ls -l "$GITHUB_WORKSPACE/media"
 
       - name: Build the review page
+        if: steps.pick.outputs.go == 'true'
         run: node scripts/docs-media-review-page.mjs media
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: steps.pick.outputs.go == 'true'
         with:
           name: docs-media-${{ github.run_id }}
           path: media
@@ -153,10 +177,12 @@ jobs:
           if-no-files-found: error
 
       - name: Install Wrangler
+        if: steps.pick.outputs.go == 'true'
         run: npm install -g --ignore-scripts wrangler@4.158.0
 
       # A preview deployment on its own branch alias, never production (the site deploys from master).
       - name: Publish the preview
+        if: steps.pick.outputs.go == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -167,6 +193,7 @@ jobs:
           echo "PREVIEW_URL=https://media-$RUN_ID.$PROJECT.pages.dev" >> "$GITHUB_ENV"
 
       - name: Open the review issue
+        if: steps.pick.outputs.go == 'true'
         env:
           GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
           GH_REPO: termenbox/termenbox-source
@@ -181,7 +208,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@e737203677459b53d9f48012f376e46b2d809845
+        uses: termenbox/termenbox-ci/.github/actions/finish@c793fdd572460ac87af14956e6676e4c1dac25f6
         with:
           key: ${{ secrets.LOG_KEY }}
           name: render-${{ strategy.job-index }}
