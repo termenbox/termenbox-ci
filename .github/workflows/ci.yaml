@@ -62,6 +62,9 @@ jobs:
       code: ${{ steps.scope.outputs.code }}
       scripted: ${{ steps.scope.outputs.scripted }}
       media: ${{ steps.scope.outputs.media }}
+      server: ${{ steps.scope.outputs.server }}
+      client: ${{ steps.scope.outputs.client }}
+      installer: ${{ steps.scope.outputs.installer }}
       smoke: ${{ steps.scope.outputs.smoke }}
       browsers_matrix: ${{ steps.matrices.outputs.browsers }}
       real_matrix: ${{ steps.matrices.outputs.real }}
@@ -95,12 +98,12 @@ jobs:
           if [ "$EVENT" = push ]; then
             # A push repeats the run its pull request passed: build, lint, unit tests and one Chromium leg, and the
             # `ci` status still posts. The other engines and the binaries run on the daily run.
-            printf 'code=true\nscripted=true\nmedia=true\nsmoke=true\n' | tee -a "$GITHUB_OUTPUT"
+            printf 'code=true\nscripted=true\nmedia=true\nserver=true\nclient=true\ninstaller=true\nsmoke=true\n' | tee -a "$GITHUB_OUTPUT"
             echo '[{"engine":"firefox"},{"engine":"webkit"},{"engine":"chromium","runs":"desktop:1440x900:2"}]' > skip.json
             echo '[]' > skip_static.json
           elif [ "$EVENT" != pull_request ]; then
             # A manual or daily run does everything.
-            printf 'code=true\nscripted=true\nmedia=true\nsmoke=false\n' | tee -a "$GITHUB_OUTPUT"
+            printf 'code=true\nscripted=true\nmedia=true\nserver=true\nclient=true\ninstaller=true\nsmoke=false\n' | tee -a "$GITHUB_OUTPUT"
             echo '[]' > skip.json
             echo '[]' > skip_static.json
           else
@@ -172,6 +175,7 @@ jobs:
   client:
     name: Client (typecheck, build)
     needs: changes
+    # Also on a server-only change: the client's unit tests read fixtures the server writes (secure vectors, the status frame).
     if: needs.changes.outputs.code == 'true' || needs.changes.outputs.media == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -351,7 +355,7 @@ jobs:
   rust-lint:
     name: Rust (fmt, clippy)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.server != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     outputs:
@@ -399,7 +403,7 @@ jobs:
   rust-build:
     name: Rust (release build)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && (needs.changes.outputs.server != 'false' || needs.changes.outputs.client != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -450,7 +454,7 @@ jobs:
   rust-test:
     name: Rust (tests)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.server != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     outputs:
@@ -906,7 +910,8 @@ jobs:
   # directory announce) cannot reach a release unnoticed.
   e2e-static:
     name: Browser end-to-end with the static binary
-    needs: static
+    needs: [changes, static]
+    if: needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -976,7 +981,7 @@ jobs:
   tmux:
     name: Bundled tmux (static, ${{ matrix.arch }})
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && (needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false')
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     strategy:
@@ -1091,7 +1096,8 @@ jobs:
   # key, then install, install again, a refused tampered release, and a revert that restores the machine.
   installer:
     name: Native installer (${{ matrix.image }}, ${{ matrix.mode }})
-    needs: [static, tmux]
+    needs: [changes, static, tmux]
+    if: needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -1163,7 +1169,8 @@ jobs:
   # daemon, a local registry, and signed manifests that name the images by digest.
   container-installer:
     name: Container installer
-    needs: [static]
+    needs: [changes, static]
+    if: needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     outputs:
@@ -1449,10 +1456,16 @@ jobs:
               if result == "success":
                   continue
               smoke_skips = ("e2e", "browsers-real", "static", "e2e-static", "installer", "container-installer")
-              allowed = result == "skipped" and ((out.get("code") == "false" and not (name == "client" and out.get("media") != "false")) or (name == "browsers" and out.get("scripted") == "false") or (out.get("smoke") == "true" and name in smoke_skips))
+              server, client, installer = out.get("server") != "false", out.get("client") != "false", out.get("installer") != "false"
+              scoped = (
+                  (name in ("rust-lint", "rust-test") and not server)
+                  or (name in ("rust-build", "e2e", "browsers-real") and not server and not client)
+                  or (name in ("tmux", "installer", "container-installer", "e2e-static") and not server and not installer)
+              )
+              allowed = result == "skipped" and ((out.get("code") == "false" and not (name == "client" and out.get("media") != "false")) or (name == "browsers" and out.get("scripted") == "false") or (out.get("smoke") == "true" and name in smoke_skips) or (out.get("code") == "true" and scoped))
               if not allowed:
                   bad.append(name + ": " + result)
-          print("code=%s scripted=%s media=%s smoke=%s" % (out.get("code"), out.get("scripted"), out.get("media"), out.get("smoke")))
+          print("code=%s scripted=%s media=%s server=%s client=%s installer=%s smoke=%s" % (out.get("code"), out.get("scripted"), out.get("media"), out.get("server"), out.get("client"), out.get("installer"), out.get("smoke")))
           if bad:
               print("not green: " + ", ".join(bad))
               sys.exit(1)
