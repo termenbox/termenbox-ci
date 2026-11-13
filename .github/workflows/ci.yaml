@@ -989,9 +989,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { arch: x86_64, runner: ubuntu-latest }
-          - { arch: aarch64, runner: ubuntu-24.04-arm }
+        # The legs of the static binary (a pull request skips aarch64: its tmux is a cache hit nobody downloads there).
+        include: ${{ fromJSON(needs.changes.outputs.static_matrix) }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
