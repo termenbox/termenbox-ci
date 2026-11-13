@@ -134,8 +134,10 @@ jobs:
             { "engine": "chromium", "runs": "desktop:1440x900:2" },
             { "engine": "firefox", "runs": "desktop:1024x768:1" },
             { "engine": "firefox", "runs": "desktop:1440x900:2" },
-            { "engine": "webkit", "runs": "desktop:1024x768:1" },
-            { "engine": "webkit", "runs": "desktop:1440x900:2" },
+            { "engine": "webkit", "runs": "desktop:1024x768:1:1/2" },
+            { "engine": "webkit", "runs": "desktop:1024x768:1:2/2" },
+            { "engine": "webkit", "runs": "desktop:1440x900:2:1/2" },
+            { "engine": "webkit", "runs": "desktop:1440x900:2:2/2" },
             { "engine": "webkit", "runs": "phone:390x844:3" }
           ]
           JSON
@@ -631,7 +633,7 @@ jobs:
 
       - run: pnpm --filter termenbox-client run e2e:build
 
-      - name: Run the scripts (size:ratio list from the matrix)
+      - name: Run the scripts (suite:size:ratio[:shard i/n] list from the matrix)
         shell: bash
         working-directory: packages/client
         env:
@@ -647,12 +649,12 @@ jobs:
           [ "$RUN_ENGINE" != "chromium" ] && export HOME=/root
           fail=0
           for run in $RUN_LIST; do
-            IFS=: read -r suite size dpr <<< "$run"
-            tag="$suite-$RUN_ENGINE-$size-${dpr}x"
+            IFS=: read -r suite size dpr shard <<< "$run"
+            tag="$suite-$RUN_ENGINE-$size-${dpr}x${shard:+-shard${shard%/*}}"
             echo "=== $tag ==="
             mkdir -p "$RUN_ARTIFACTS/$tag"
             E2E_ENGINE="$RUN_ENGINE" E2E_VIEWPORT="$size" E2E_DPR="$dpr" E2E_ARTIFACTS="$RUN_ARTIFACTS/$tag" \
-              node e2e/suite.mjs "$suite" || { echo "::error::$tag failed"; fail=1; }
+              node e2e/suite.mjs "$suite" ${shard:+--shard "$shard"} || { echo "::error::$tag failed"; fail=1; }
           done
           exit $fail
 
