@@ -592,7 +592,7 @@ jobs:
 
   e2e:
     name: Browser end-to-end and resource gates (${{ matrix.shard }}/${{ strategy.job-total }})
-    needs: [changes, rust-build, pages]
+    needs: [changes, rust-build, pages, tmux]
     if: needs.changes.outputs.smoke != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -625,8 +625,18 @@ jobs:
       # Only the client package: the scripts import playwright-core; the pages come from the `pages` job.
       - run: pnpm install --frozen-lockfile --filter termenbox-client --ignore-scripts
 
-      - name: Install tmux
-        run: sudo apt-get update && sudo apt-get install -y tmux
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: tmux-musl-x86_64
+          path: ${{ runner.temp }}/tmux-bin
+
+      # The tmux the product bundles (and users run), not the distribution's: the browser scripts drive real sessions with it.
+      - name: Put the bundled tmux first on PATH
+        shell: bash
+        run: |
+          chmod +x "$RUNNER_TEMP/tmux-bin/tmux"
+          echo "$RUNNER_TEMP/tmux-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/tmux-bin/tmux" -V
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -1009,7 +1019,7 @@ jobs:
   # directory announce) cannot reach a release unnoticed.
   e2e-static:
     name: Browser end-to-end with the static binary
-    needs: [changes, static, pages]
+    needs: [changes, static, pages, tmux]
     if: needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -1038,8 +1048,18 @@ jobs:
       # Only the client package: the scripts import playwright-core; the pages come from the `pages` job.
       - run: pnpm install --frozen-lockfile --filter termenbox-client --ignore-scripts
 
-      - name: Install tmux
-        run: sudo apt-get update && sudo apt-get install -y tmux
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: tmux-musl-x86_64
+          path: ${{ runner.temp }}/tmux-bin
+
+      # The tmux the product bundles (and users run), not the distribution's: the browser scripts drive real sessions with it.
+      - name: Put the bundled tmux first on PATH
+        shell: bash
+        run: |
+          chmod +x "$RUNNER_TEMP/tmux-bin/tmux"
+          echo "$RUNNER_TEMP/tmux-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/tmux-bin/tmux" -V
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -1087,7 +1107,7 @@ jobs:
   tmux:
     name: Bundled tmux (static, ${{ matrix.arch }})
     needs: changes
-    if: needs.changes.outputs.code == 'true' && (needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false')
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     strategy:
