@@ -69,7 +69,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       # A dry run may use any version (the default is 0.0.0); the gates of the wrappers hold a published one to the tag.
       - name: The version has the Cargo.toml version as its core
@@ -179,11 +180,13 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: build-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # Every channel's release workflow calls docker-build.yaml as its `Image` job beside this workflow, so the image may
   # still be building: wait for the multi-architecture tag and record the digests the signed manifest will name. It holds
@@ -211,7 +214,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
@@ -238,13 +242,15 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: image-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.GHCR_TOKEN }}
             ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The manifest is written, signed, checked, published and deployed by five jobs so that no job runs code it does not
   # need while it holds a credential:
@@ -277,7 +283,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -322,11 +329,13 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: manifest-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   sign:
     name: Sign the manifest
@@ -407,11 +416,13 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: sign-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.RELEASE_SIGNING_KEY }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   verify:
     name: Verify, licence and SHA256SUMS
@@ -434,7 +445,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -512,11 +524,13 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: verify-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   sign-sums:
     name: Sign SHA256SUMS
@@ -587,11 +601,13 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: sign-sums-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.RELEASE_SIGNING_KEY }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   publish:
     name: Publish
@@ -629,7 +645,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -703,7 +720,8 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: publish-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
@@ -711,6 +729,7 @@ jobs:
             ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
             ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
             ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The client is built in a job that holds no deploy credential: it reads the public client id and the source token, and
   # hands packages/client/dist to the deploy job as an artifact. The job that holds the Cloudflare token, the function
@@ -735,7 +754,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - name: Build the client
         uses: ./.github/actions/build-client
@@ -760,12 +780,14 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: build-client-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   deploy:
     name: Deploy the client
@@ -796,7 +818,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -827,7 +850,8 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: deploy-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -839,6 +863,7 @@ jobs:
             ${{ secrets.TERMENBOX_DIRECTORY_SALT }}
             ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
             ${{ secrets.TERMENBOX_GITHUB_CLIENT_SECRET }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # Reads the origin the way a browser does once the deployment is up; it holds no secret and runs code of this repository
   # only. A failure leaves the deployment in place and turns the run red.

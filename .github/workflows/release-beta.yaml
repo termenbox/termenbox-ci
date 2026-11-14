@@ -60,7 +60,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           depth: 0
           base: ${{ github.event.client_payload.base }}
           fetch: master
@@ -125,13 +126,15 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: gate-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.REVIEWS_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # GitHub does not start a workflow for a tag its own token created, and a second run would need its own approvals, so
   # the image is built by calling the workflow in this run. The release waits for the image tag and signs its digests.

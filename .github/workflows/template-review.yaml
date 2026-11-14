@@ -46,7 +46,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
@@ -107,7 +108,8 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: publish-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -115,6 +117,7 @@ jobs:
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.STATUS_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   gate:
     name: Check the editor's permission
@@ -155,11 +158,13 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: gate-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.STATUS_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   accept:
     name: Record an acceptance
@@ -180,7 +185,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
@@ -212,9 +218,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: accept-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.STATUS_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
