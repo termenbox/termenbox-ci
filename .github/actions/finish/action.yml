@@ -5,6 +5,8 @@ inputs:
   name: { description: Artifact name stem, required: true }
   status: { description: "The calling job's status (job.status). Only `failure` starts the failure report.", default: '' }
   log-token: { description: "Fine-grained token with Issues write on the source repo only (secret LOG_TOKEN). Empty: nothing is posted.", default: '' }
+  app-id: { description: "The reporter app's id (secret REPORTER_APP_ID): an issues-write token of one hour is minted for the source in place of log-token", default: '' }
+  app-key: { description: "The reporter app's private key (secret REPORTER_APP_KEY)", default: '' }
   secrets: { description: "Secret values of the calling job (toJSON(secrets), or one value per line for a release or deploy job): every one is scrubbed from what is posted.", default: '' }
   needs: { description: "toJSON(needs), for the aggregating `ci` job: its summary then lists the failed jobs and nothing is posted.", default: '' }
 outputs:
@@ -32,11 +34,13 @@ runs:
         out="$(printf '%s' "$out" | head -n1)"; [ -n "$out" ] || out="ci failed"
         echo "summary=$out" >> "$GITHUB_OUTPUT"
     - id: post
-      if: ${{ inputs.status == 'failure' && inputs.log-token != '' && inputs.needs == '' }}
+      if: ${{ inputs.status == 'failure' && (inputs.log-token != '' || inputs.app-id != '') && inputs.needs == '' }}
       continue-on-error: true
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.log-token }}
+        APP_ID: ${{ inputs.app-id }}
+        APP_KEY: ${{ inputs.app-key }}
         GH_REPO: termenbox/termenbox-source
         SCRUB_SECRETS: ${{ inputs.secrets }}
         LOG_KEY: ${{ inputs.key }}
@@ -45,6 +49,10 @@ runs:
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: |
         # Posting is a courtesy: whatever goes wrong here, say nothing and leave the job's result alone.
+        if [ -n "$APP_ID" ]; then
+          GH_TOKEN=$(MINT_STDOUT=1 REPO=termenbox/termenbox-source PERMISSIONS='{"issues":"write"}' bash "$GITHUB_ACTION_PATH/../app-token/mint.sh" 2>/dev/null) || exit 0
+          export GH_TOKEN
+        fi
         f="$RUNNER_TEMP/quiet.log"; body="$RUNNER_TEMP/failure-comment.md"; rm -f "$body"
         py="$GITHUB_ACTION_PATH/../../../scripts/ci_failure.py"
         [ -f "$f" ] || exit 0

@@ -1,0 +1,22 @@
+name: Mint a GitHub app token
+description: Mints an installation token of one of the ci repo's apps, limited to one repository and the permissions asked for, and masks it. The token lasts an hour; nothing is written to disk.
+inputs:
+  app-id: { description: "The app's id (secret REPORTER_APP_ID, DISPATCHER_APP_ID or PUBLISHER_APP_ID)", required: true }
+  app-key: { description: "The app's private key (the matching *_APP_KEY secret); it is read from the environment, never from a command line", required: true }
+  repository: { description: "Repository the token is limited to, as owner/name", default: termenbox/termenbox-source }
+  permissions: { description: 'Permissions as a JSON object, for example {"contents":"read"}', required: true }
+outputs:
+  token:
+    description: The installation token (masked)
+    value: ${{ steps.mint.outputs.token }}
+runs:
+  using: composite
+  steps:
+    - id: mint
+      shell: bash
+      env:
+        APP_ID: ${{ inputs.app-id }}
+        APP_KEY: ${{ inputs.app-key }}
+        REPO: ${{ inputs.repository }}
+        PERMISSIONS: ${{ inputs.permissions }}
+      run: bash "$GITHUB_ACTION_PATH/mint.sh"
