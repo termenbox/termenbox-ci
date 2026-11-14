@@ -45,7 +45,7 @@ test('repository_workflows_and_actions_pass', () => {
 
 test('repository_level_secrets_are_allowed_and_any_other_still_needs_an_environment', () => {
   const wf = (name) => `on: push\njobs:\n  a:\n    steps:\n      - run: x\n        env:\n          T: \${{ secrets.${name} }}\n`;
-  assert.deepEqual(checkWorkflow('a.yaml', wf('SOURCE_TOKEN')), []);
-  assert.deepEqual(checkWorkflow('a.yaml', wf('DISPATCH_TOKEN')), []);
+  assert.deepEqual(checkWorkflow('a.yaml', wf('REPORTER_APP_KEY')), []);
+  assert.deepEqual(checkWorkflow('a.yaml', wf('DISPATCHER_APP_KEY')), []);
   assert.equal(checkWorkflow('a.yaml', wf('R2_RELEASE_SECRET_ACCESS_KEY')).length, 1);
 });

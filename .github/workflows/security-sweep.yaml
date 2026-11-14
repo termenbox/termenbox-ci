@@ -113,9 +113,6 @@ jobs:
         id: sweep
         env:
           GH_TOKEN: ${{ secrets.SWEEP_READ_TOKEN }}
-          SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
-          LOG_TOKEN: ${{ secrets.LOG_TOKEN }}
-          STATUS_TOKEN: ${{ secrets.STATUS_TOKEN }}
           SWEEP_GH_REPO: ${{ github.repository }}
           SWEEP_SUMMARY: ${{ runner.temp }}/sweep-summary.txt
           SWEEP_STATE: ${{ runner.temp }}/sweep-state.txt

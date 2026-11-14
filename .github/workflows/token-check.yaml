@@ -1,6 +1,7 @@
 name: token-check
-# Calls the GitHub and Cloudflare APIs with each token and prints pass or fail per token, never a value or a body.
-# Positive checks prove a token can do its job; negative checks prove it cannot do more.
+# Calls the GitHub and Cloudflare APIs with the apps' tokens and prints pass or fail per check, never a value or a body.
+# Positive checks prove a token can do its job; negative checks prove it cannot do more, and that an app is installed only
+# where it belongs. The apps mint tokens of one hour: there is nothing to expire or rotate but each app's key.
 on:
   workflow_dispatch:
 permissions:
@@ -11,14 +12,18 @@ jobs:
     timeout-minutes: 10
     env:
       SRC: termenbox/termenbox-source
-      SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
-      STATUS_TOKEN: ${{ secrets.STATUS_TOKEN }}
-      DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
-      LOG_TOKEN: ${{ secrets.LOG_TOKEN }}
+      CI: termenbox/termenbox-ci
+      REPORTER_APP_ID: ${{ secrets.REPORTER_APP_ID }}
+      REPORTER_APP_KEY: ${{ secrets.REPORTER_APP_KEY }}
+      DISPATCHER_APP_ID: ${{ secrets.DISPATCHER_APP_ID }}
+      DISPATCHER_APP_KEY: ${{ secrets.DISPATCHER_APP_KEY }}
       CF_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
       CF_ACCOUNT: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       LOG_KEY: ${{ secrets.LOG_KEY }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Check every token
         run: |
           fail=0
@@ -27,27 +32,47 @@ jobs:
           expect() { # expect <label> <got> <want-regex>
             if printf '%s' "$2" | grep -Eq "^($3)$"; then echo "pass  $1"; else echo "FAIL  $1 (got $2)"; fail=1; fi
           }
-          sha=$(curl -s -H "Authorization: Bearer $SOURCE_TOKEN" "https://api.github.com/repos/$SRC/commits/develop" | sed -n 's/.*"sha": *"\([0-9a-f]\{40\}\)".*/\1/p' | head -n1)
-          [ -n "$sha" ] || { echo "FAIL  SOURCE_TOKEN cannot read develop"; exit 1; }
+          # mint <app> <repo> <permissions-json> -> prints the token, or nothing when GitHub refuses
+          mint() {
+            case "$1" in
+              reporter) id="$REPORTER_APP_ID"; key="$REPORTER_APP_KEY" ;;
+              dispatcher) id="$DISPATCHER_APP_ID"; key="$DISPATCHER_APP_KEY" ;;
+            esac
+            APP_ID="$id" APP_KEY="$key" REPO="$2" PERMISSIONS="$3" MINT_STDOUT=1 bash .github/actions/app-token/mint.sh 2>/dev/null || true
+          }
+          refused() { # refused <label> <token>: minting returned nothing
+            if [ -z "$2" ]; then echo "pass  $1"; else echo "FAIL  $1 (a token was minted)"; fail=1; fi
+          }
 
-          expect "SOURCE_TOKEN reads contents"             "$(api "$SOURCE_TOKEN" GET repos/$SRC/contents/package.json)" 200
-          expect "SOURCE_TOKEN cannot write statuses"      "$(api "$SOURCE_TOKEN" POST repos/$SRC/statuses/$sha '{"state":"success","context":"token-check"}')" '403|404'
+          read_tok=$(mint reporter $SRC '{"contents":"read"}')
+          [ -n "$read_tok" ] || { echo "FAIL  the reporter app cannot mint a contents-read token for the source"; exit 1; }
+          sha=$(curl -s -H "Authorization: Bearer $read_tok" "https://api.github.com/repos/$SRC/commits/develop" | sed -n 's/.*"sha": *"\([0-9a-f]\{40\}\)".*/\1/p' | head -n1)
+          [ -n "$sha" ] || { echo "FAIL  a reporter contents token cannot read develop"; exit 1; }
+          expect "reporter contents token reads contents"        "$(api "$read_tok" GET repos/$SRC/contents/package.json)" 200
+          expect "reporter contents token cannot write statuses" "$(api "$read_tok" POST repos/$SRC/statuses/$sha '{"state":"success","context":"token-check"}')" '403|404'
 
-          expect "STATUS_TOKEN lists pull requests"        "$(api "$STATUS_TOKEN" GET "repos/$SRC/pulls?per_page=1")" 200
-          expect "STATUS_TOKEN writes a status"            "$(api "$STATUS_TOKEN" POST repos/$SRC/statuses/$sha '{"state":"success","context":"token-check","description":"token check"}')" 201
-          expect "STATUS_TOKEN cannot read contents"       "$(api "$STATUS_TOKEN" GET repos/$SRC/contents/package.json)" '403|404'
+          status_tok=$(mint reporter $SRC '{"statuses":"write","pull_requests":"read"}')
+          expect "reporter status token lists pull requests"     "$(api "$status_tok" GET "repos/$SRC/pulls?per_page=1")" 200
+          expect "reporter status token writes a status"         "$(api "$status_tok" POST repos/$SRC/statuses/$sha '{"state":"success","context":"token-check","description":"token check"}')" 201
+          expect "reporter status token cannot read contents"    "$(api "$status_tok" GET repos/$SRC/contents/package.json)" '403|404'
 
-          expect "DISPATCH_TOKEN dispatches to the ci repo" "$(api "$DISPATCH_TOKEN" POST repos/termenbox/termenbox-ci/dispatches '{"event_type":"token-check"}')" 204
-          expect "DISPATCH_TOKEN cannot see the private repo" "$(api "$DISPATCH_TOKEN" GET repos/$SRC)" '403|404'
+          issues_tok=$(mint reporter $SRC '{"issues":"write"}')
+          expect "reporter issues token cannot read contents"    "$(api "$issues_tok" GET repos/$SRC/contents/package.json)" '403|404'
 
-          # The ruleset lets only the owner create a branch or move main here. A refused attempt returns 403 or 422; the main
-          # attempt is a no-op even if it were allowed (it sets main to where it already is).
-          main=$(curl -s "https://api.github.com/repos/termenbox/termenbox-ci/commits/main" | sed -n 's/.*"sha": *"\([0-9a-f]\{40\}\)".*/\1/p' | head -n1)
+          refused "the reporter app is not installed on the ci repo" "$(mint reporter $CI '{"contents":"read"}')"
+          refused "the reporter app cannot ask for contents write" "$(mint reporter $SRC '{"contents":"write"}')"
+
+          disp_tok=$(mint dispatcher $CI '{"contents":"write"}')
+          [ -n "$disp_tok" ] || { echo "FAIL  the dispatcher app cannot mint a token for the ci repo"; exit 1; }
+          expect "dispatcher token dispatches to the ci repo"    "$(api "$disp_tok" POST repos/$CI/dispatches '{"event_type":"token-check"}')" 204
+          refused "the dispatcher app is not installed on the source" "$(mint dispatcher $SRC '{"contents":"read"}')"
+
+          # No ruleset names an app as a bypass actor: a refused attempt returns 403 or 422; the main attempt is a no-op even
+          # if it were allowed (it sets main to where it already is).
+          main=$(curl -s "https://api.github.com/repos/$CI/commits/main" | sed -n 's/.*"sha": *"\([0-9a-f]\{40\}\)".*/\1/p' | head -n1)
           [ -n "$main" ] || { echo "FAIL  cannot read main of the ci repo"; exit 1; }
-          expect "DISPATCH_TOKEN cannot create a branch"   "$(api "$DISPATCH_TOKEN" POST repos/termenbox/termenbox-ci/git/refs "{\"ref\":\"refs/heads/token-check-probe\",\"sha\":\"$main\"}")" '403|404|422'
-          expect "DISPATCH_TOKEN cannot push main"         "$(api "$DISPATCH_TOKEN" PATCH repos/termenbox/termenbox-ci/git/refs/heads/main "{\"sha\":\"$main\",\"force\":false}")" '403|404|422'
-
-          expect "LOG_TOKEN cannot read the source contents" "$(api "$LOG_TOKEN" GET repos/$SRC/contents/package.json)" '403|404'
+          expect "dispatcher token cannot create a branch"       "$(api "$disp_tok" POST repos/$CI/git/refs "{\"ref\":\"refs/heads/token-check-probe\",\"sha\":\"$main\"}")" '403|404|422'
+          expect "dispatcher token cannot push main"             "$(api "$disp_tok" PATCH repos/$CI/git/refs/heads/main "{\"sha\":\"$main\",\"force\":false}")" '403|404|422'
 
           if [ -n "$CF_ACCOUNT" ]; then ep="accounts/$CF_ACCOUNT/tokens/verify"; else ep="user/tokens/verify"; fi
           v=$(curl -s -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/$ep")

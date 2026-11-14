@@ -59,6 +59,4 @@ jobs:
             ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             ${{ secrets.CLOUDFLARE_API_TOKEN }}
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.REPORTER_APP_KEY }}

@@ -143,8 +143,6 @@ jobs:
           secrets: |-
             ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.REPORTER_APP_KEY }}
           needs: ${{ toJSON(needs) }}
 

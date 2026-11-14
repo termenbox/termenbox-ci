@@ -146,9 +146,6 @@ jobs:
           secrets: |-
             ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
-            ${{ secrets.STATUS_TOKEN }}
             ${{ secrets.REVIEWS_TOKEN }}
             ${{ secrets.REPORTER_APP_KEY }}
 

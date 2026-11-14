@@ -63,6 +63,4 @@ jobs:
           secrets: |-
             ${{ secrets.ANTHROPIC_API_KEY }}
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.REPORTER_APP_KEY }}

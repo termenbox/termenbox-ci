@@ -155,8 +155,6 @@ jobs:
             ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             ${{ secrets.CLOUDFLARE_API_TOKEN }}
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
             ${{ secrets.R2_ACCESS_KEY_ID }}
             ${{ secrets.R2_SECRET_ACCESS_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
-            ${{ secrets.SOURCE_TOKEN }}
