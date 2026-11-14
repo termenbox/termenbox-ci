@@ -74,25 +74,31 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@97805a74052190f48fd211a681c2feacf054eac3
 
       - if: ${{ !cancelled() }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
-          SHA: ${{ github.event.client_payload.sha }}
-          STATE: pending
-          DESC: running
-        run: |
-          [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
-          gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$STATE" -f context=ci \
-            -f description="$DESC" -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null 2>&1 || true
+        uses: termenbox/termenbox-ci/.github/actions/post-status@97805a74052190f48fd211a681c2feacf054eac3
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          sha: ${{ github.event.client_payload.sha }}
+          context: ci
+          state: pending
+          description: running
 
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+      - name: Token to read the pull request's files
+        id: files-token
+        uses: termenbox/termenbox-ci/.github/actions/app-token@97805a74052190f48fd211a681c2feacf054eac3
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"pull_requests":"read"}'
       - name: Scope
         id: scope
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.files-token.outputs.token }}
           EVENT: ${{ github.event.client_payload.event }}
           PR: ${{ github.event.client_payload.pr }}
         run: |
@@ -167,12 +173,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: changes-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
-            ${{ secrets.STATUS_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   client:
     name: Client (typecheck, build)
@@ -190,7 +195,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
@@ -288,11 +294,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: client-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The optional wrappers: the icon and bridge generators, the injected bridge and the Electron
   # main process with its navigation/CSP tests. Platform builds still need their own hosts (R76 step 5); this
@@ -309,7 +315,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
@@ -350,11 +357,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: native-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   rust-lint:
     name: Rust (fmt, clippy)
@@ -370,7 +377,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -396,11 +404,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: rust-lint-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The release server binary the browser jobs drive. Nothing else runs in this job, so e2e and browsers-real start as
   # soon as it is compiled instead of waiting for clippy and the debug test build.
@@ -418,7 +426,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       # The server binary depends on the Rust sources, the lockfile and the relay files and the tmux build script it embeds, not on the client: a pull request
       # that leaves them as they are on develop takes the binary a push to develop built, and starts the browser jobs a minute
@@ -469,11 +478,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: rust-build-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   rust-test:
     name: Rust (tests)
@@ -489,7 +498,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -525,11 +535,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: rust-test-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The client and the probe pages the jobs that wait for the server binary drive, built once beside `rust-build`. Each of
   # them used to run `pnpm install` and `e2e:build` itself (about a minute); they now download this. `browsers` has no
@@ -548,7 +558,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
@@ -582,11 +593,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: pages-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # Real Chrome against the real server binary: login and claim over WebRTC, typing, reconnect with screen replay,
   # plus the resource gates (server RSS with 10 sessions, CPU while output streams). Only GitHub is a stand-in.
@@ -611,7 +622,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
@@ -680,11 +692,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: e2e-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The browser binaries and their OS deps (GStreamer + codec stack for WebKit) are baked into the
   # CI image (docker/Dockerfile.ci, .github/workflows/ci-image.yaml); the matrix jobs start from it
@@ -711,7 +723,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
@@ -769,11 +782,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: browsers-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # R36: the same engines against the real server binary and real tmux (attach, switch, reconnect, keys, selection, mouse
   # reporting, resize, the 720/1024 breakpoints). WebSocket only; WebRTC and the resource gates stay in the Chromium job above.
@@ -807,7 +820,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
@@ -888,11 +902,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: browsers-real-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The native host mode ships one static musl binary per architecture: no glibc, no OpenSSL,
   # nothing to install. Build both on the native runners and fail if anything is linked dynamically.
@@ -914,7 +928,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -1005,11 +1020,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: static-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The same end-to-end test as above against the static binary, so musl-specific problems (DNS, DTLS, PTY, the
   # directory announce) cannot reach a release unnoticed.
@@ -1027,7 +1042,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
@@ -1085,11 +1101,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: e2e-static-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The bundled tmux, built from the pinned sources and put through its gate (static, runs with an
   # empty PATH and no terminfo, drives a session in control mode). The installer job installs this very binary.
@@ -1119,7 +1135,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - name: Restore the tmux build
         id: cache
@@ -1207,11 +1224,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: tmux-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The native installer run for real: a machine with systemd, a release signed with a throwaway
   # key, then install, install again, a refused tampered release, and a revert that restores the machine.
@@ -1235,7 +1252,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -1280,11 +1298,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: installer-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # The container install and its updater run for real: a machine with systemd and the runner's Docker
   # daemon, a local registry, and signed manifests that name the images by digest.
@@ -1303,7 +1321,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -1339,11 +1358,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: container-installer-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # One result for branch protection: require this check instead of the individual jobs, and the graph above can be
   # reshaped without touching the repository settings again. A skipped job is a failure unless `changes` said the pull
@@ -1367,7 +1386,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
@@ -1383,11 +1403,20 @@ jobs:
           node scripts/check-workflow-secrets.mjs
           node scripts/check-security-jobs.mjs
 
+      - name: Token to read the pull request's files and comment on it
+        id: comment-token
+        if: github.event.client_payload.event == 'pull_request'
+        continue-on-error: true
+        uses: termenbox/termenbox-ci/.github/actions/app-token@97805a74052190f48fd211a681c2feacf054eac3
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"pull_requests":"read","issues":"write"}'
       - name: Comment when an edge path changed
         if: github.event.client_payload.event == 'pull_request'
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.comment-token.outputs.token }}
           PR: ${{ github.event.client_payload.pr }}
         run: |
           gh api --paginate "repos/termenbox/termenbox-source/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)' > "$RUNNER_TEMP/paths.txt"
@@ -1407,12 +1436,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: security-surface-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
-            ${{ secrets.STATUS_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # Supply chain (plan step C.5): the workflow linter (policy in .github/zizmor.yml), `cargo deny` for advisories and the
   # licence policy (deny.toml), and `pnpm audit` against the dated allowlist (.github/audit-allowlist.txt).
@@ -1431,7 +1459,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
         with:
@@ -1461,11 +1490,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: supply-chain-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # No commit of a pull request, and no test it adds,
   # names a private finding id or an unpublished advisory id. Runs for every pull request, whatever it touches.
@@ -1481,7 +1510,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           depth: 0
           base: ${{ github.event.client_payload.base }}
       - name: Check the commits of the pull request
@@ -1498,11 +1528,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: commit-ids-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # Pushes only: drops the older generations of every cache group (each rust-cache and setup-node save leaves the
   # previous entry behind), so the 10 GB budget holds the newest entry of each group instead of five of them.
@@ -1526,7 +1556,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - name: Keep the newest entry of every cache group
         run: |
@@ -1547,11 +1578,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: cache-prune-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   ci:
     name: CI result
@@ -1600,37 +1631,43 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: ci-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
           needs: ${{ toJSON(needs) }}
 
       - if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
-          SHA: ${{ github.event.client_payload.sha }}
-          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
-          DESC: ${{ steps.finish.outputs.summary || 'ci result' }}
-        run: |
-          [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
-          gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$STATE" -f context=ci \
-            -f description="$DESC" -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null 2>&1 || true
+        uses: termenbox/termenbox-ci/.github/actions/post-status@97805a74052190f48fd211a681c2feacf054eac3
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          sha: ${{ github.event.client_payload.sha }}
+          context: ci
+          state: ${{ job.status == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.finish.outputs.summary || 'ci result' }}
 
       # The commit status `docs` (scripts/land.sh requires it): the docs checks of the client job. A change that leaves the
       # client job rightly skipped (plans and other docs the checks do not read) has nothing for them to check.
       - if: always()
+        id: docs
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
-          SHA: ${{ github.event.client_payload.sha }}
           CLIENT: ${{ needs.client.result }}
           DOCS: ${{ needs.client.outputs.docs }}
         run: |
-          [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
           if [ "$DOCS" = success ]; then state=success; desc="docs checks passed"
           elif [ "$CLIENT" = skipped ]; then state=success; desc="no docs checks for this change"
           else state=failure; desc="docs checks failed or were not reached"; fi
-          gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$state" -f context=docs \
-            -f description="$desc" -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null 2>&1 || true
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "desc=$desc" >> "$GITHUB_OUTPUT"
+      - if: always()
+        uses: termenbox/termenbox-ci/.github/actions/post-status@97805a74052190f48fd211a681c2feacf054eac3
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          sha: ${{ github.event.client_payload.sha }}
+          context: docs
+          state: ${{ steps.docs.outputs.state }}
+          description: ${{ steps.docs.outputs.desc }}
