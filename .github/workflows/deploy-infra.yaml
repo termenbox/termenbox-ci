@@ -50,7 +50,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
@@ -148,7 +149,8 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: terraform-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -156,4 +158,5 @@ jobs:
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.R2_ACCESS_KEY_ID }}
             ${{ secrets.R2_SECRET_ACCESS_KEY }}
+            ${{ secrets.REPORTER_APP_KEY }}
             ${{ secrets.SOURCE_TOKEN }}

@@ -84,7 +84,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - uses: ./.github/actions/build-client
         with:
@@ -108,12 +109,14 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: build-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   deploy:
     name: Deploy ${{ inputs.channel }} to Cloudflare Pages
@@ -138,7 +141,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
 
       - name: Fetch the built client
         if: inputs.tag == ''
@@ -182,7 +186,8 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: deploy-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -194,6 +199,7 @@ jobs:
             ${{ secrets.TERMENBOX_DIRECTORY_SALT }}
             ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
             ${{ secrets.TERMENBOX_GITHUB_CLIENT_SECRET }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   # Reads the origin the way a browser does once the deployment is up; it holds no secret and runs code of this repository
   # only. A failure leaves the deployment in place and turns the run red.

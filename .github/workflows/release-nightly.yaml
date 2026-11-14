@@ -60,7 +60,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           depth: 0
           base: ${{ github.event.client_payload.base }}
           fetch: develop
@@ -127,13 +128,15 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: select-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.STATUS_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
 
   release:
     name: Release
@@ -206,7 +209,8 @@ jobs:
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.SOURCE_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
       - name: Delete nightlies older than 14 days (never the alias target)
         env:
           GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
@@ -220,9 +224,11 @@ jobs:
           key: ${{ secrets.LOG_KEY }}
           name: prune-${{ strategy.job-index }}
           status: ${{ job.status }}
-          log-token: ${{ secrets.LOG_TOKEN }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.MIRROR_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
+            ${{ secrets.REPORTER_APP_KEY }}
