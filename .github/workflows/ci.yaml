@@ -418,12 +418,24 @@ jobs:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
+      # The server binary depends on the Rust sources, the lockfile and the relay files it embeds, not on the client: a pull request
+      # that leaves them as they are on develop takes the binary a push to develop built, and starts the browser jobs a minute
+      # sooner. The key is the content of those inputs; a push that builds saves it, a pull request only restores.
+      - name: Restore the server binary of these sources
+        id: bin
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/ci/termenbox-server
+          key: server-bin-ci-${{ hashFiles('packages/server/**', 'packages/core/**', 'packages/agent/**', 'packages/bridge-contract/**', 'Cargo.toml', 'Cargo.lock', 'infra/owner-relay/dist/**') }}
+
       - name: Install Rust toolchain
+        if: steps.bin.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - if: steps.bin.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           shared-key: rust-ci
           save-if: ${{ github.event.client_payload.event == 'push' }}
@@ -431,7 +443,15 @@ jobs:
       # The ci profile (Cargo.toml) skips fat LTO and single-threaded codegen: the browser jobs need a working server
       # fast, and the shipped bytes are the static builds below.
       - name: Build workspace
+        if: steps.bin.outputs.cache-hit != 'true'
         run: cargo build --workspace --profile ci
+
+      - name: Save the server binary of these sources
+        if: github.event.client_payload.event == 'push' && steps.bin.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/ci/termenbox-server
+          key: ${{ steps.bin.outputs.cache-primary-key }}
 
       - name: Keep the server binary for the browser end-to-end job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
