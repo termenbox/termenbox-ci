@@ -24,10 +24,18 @@ jobs:
       contents: read
     env:
       GH_TOKEN: ${{ github.token }}
-      SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
     steps:
+      - id: rt-develop
+        name: Token to read the head of develop
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
       - name: Dispatch ci.yaml on the head of develop
         shell: bash
+        env:
+          SOURCE_TOKEN: ${{ steps.rt-develop.outputs.token }}
         run: |
           set -eu
           sha=$(GH_TOKEN="$SOURCE_TOKEN" gh api repos/termenbox/termenbox-source/commits/develop -q .sha)

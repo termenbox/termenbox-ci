@@ -65,18 +65,24 @@ jobs:
           depth: 0
           base: ${{ github.event.client_payload.base }}
           fetch: develop
+      - id: rt-commits
+        name: Token for the next step (contents/statuses)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read","statuses":"read"}'
       - id: s
         env:
-          GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-commits.outputs.token }}
           GH_REPO: termenbox/termenbox-source
-          STATUS_TOKEN: ${{ secrets.STATUS_TOKEN }}
           CI_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI_REPO: termenbox/termenbox
           EVENT: ${{ (github.event.client_payload.event || github.event_name) }}
           DISPATCH_PUBLISH: ${{ inputs.publish }}
         run: |
           sha=""; for c in $(gh api "repos/termenbox/termenbox-source/commits?sha=develop&per_page=30" --jq '.[].sha'); do
-          n="$(GH_TOKEN="$STATUS_TOKEN" gh api "repos/termenbox/termenbox-source/commits/$c/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
+          n="$(gh api "repos/termenbox/termenbox-source/commits/$c/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
           if [ "${n:-0}" -gt 0 ]; then sha="$c"; break; fi
           done
           [ -n "$sha" ] || { echo "::notice::no green CI run on develop; nothing to release"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0; }

@@ -61,13 +61,20 @@ jobs:
       # The tag comes from the title of the release run ("Release (stable) · v0.1.59 · <commit>") or from the input; it is
       # checked to be exactly vX.Y.Z before anything uses it, and the commit it names is read from the source repo, not taken
       # from the run.
+      - id: rt-rel
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
       - name: Find the release commit
         id: rel
         shell: bash
         env:
           TITLE: ${{ github.event.workflow_run.display_title }}
           GIVEN: ${{ inputs.tag }}
-          TOKEN: ${{ secrets.SOURCE_TOKEN }}
+          TOKEN: ${{ steps.rt-rel.outputs.token }}
         run: |
           set +x
           tag="$GIVEN"

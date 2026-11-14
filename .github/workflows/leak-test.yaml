@@ -13,11 +13,18 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - id: rt-develop
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
       - name: Resolve develop
         id: sha
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-develop.outputs.token }}
         run: echo "sha=$(gh api repos/termenbox/termenbox-source/commits/develop -q .sha 2>/dev/null)" >> "$GITHUB_OUTPUT"
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:

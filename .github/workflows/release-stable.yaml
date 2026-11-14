@@ -70,11 +70,17 @@ jobs:
           base: ${{ github.event.client_payload.base }}
           fetch: master
           branch: master
+      - id: rt-commits
+        name: Token for the next step (contents/statuses)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read","statuses":"read"}'
       - id: g
         env:
-          GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-commits.outputs.token }}
           GH_REPO: termenbox/termenbox-source
-          STATUS_TOKEN: ${{ secrets.STATUS_TOKEN }}
           DISPATCH_VERSION: ${{ inputs.version }}
         run: |
           if [ "$TB_EVENT" = tag ]; then
@@ -94,7 +100,7 @@ jobs:
             [ "$version" = "$crate" ] || { echo "tag $tag does not match packages/server/Cargo.toml version $crate"; exit 1; }
             git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/master || { echo "$tag is not on master (decision 0129): a stable release comes only from master"; exit 1; }
             # What is released is what CI built and tested (the nightly asks the same of its commit).
-            green="$(GH_TOKEN="$STATUS_TOKEN" gh api "repos/termenbox/termenbox-source/commits/$(git rev-parse HEAD)/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
+            green="$(gh api "repos/termenbox/termenbox-source/commits/$(git rev-parse HEAD)/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
             [ "${green:-0}" -gt 0 ] || { echo "no green CI run for $(git rev-parse HEAD): a stable release is built from a commit CI has passed (wait for CI, then push the tag again)"; exit 1; }
           fi
           {
