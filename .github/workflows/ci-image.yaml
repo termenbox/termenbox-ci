@@ -36,10 +36,17 @@ jobs:
     outputs:
       run: ${{ steps.g.outputs.run }}
     steps:
+      - id: rt-gate
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
       - id: g
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-gate.outputs.token }}
           EVENT: ${{ github.event.client_payload.event || 'other' }}
           BASE: ${{ github.event.client_payload.base }}
           SHA: ${{ (github.event.client_payload.sha || inputs.sha) }}
@@ -95,12 +102,19 @@ jobs:
       # ci.yaml pulls this image by digest. This run cannot change ci.yaml (only the owner opens a branch here), so when the
       # new digest is not the one ci.yaml pins, it posts that digest, and nothing else, to the rolling `CI failures` issue;
       # the next change to ci.yaml bumps both container lines. The monthly sweep's ci-image-age fails a bump left 60 days.
+      - id: rt-moved
+        name: Token for the next step (issues)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"issues":"write"}'
       - name: Say when the digest moved
         continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LOG_TOKEN: ${{ secrets.LOG_TOKEN }}
+          LOG_TOKEN: ${{ steps.rt-moved.outputs.token }}
           DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           case "$DIGEST" in sha256:*) ;; *) exit 1 ;; esac
@@ -135,13 +149,11 @@ jobs:
           needs: ${{ toJSON(needs) }}
 
       - if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
-          SHA: ${{ (github.event.client_payload.sha || inputs.sha) }}
-          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
-          DESC: ${{ steps.finish.outputs.summary || 'ci result' }}
-        run: |
-          [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
-          gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$STATE" -f context=ci \
-            -f description="$DESC" -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null 2>&1 || true
+        uses: termenbox/termenbox-ci/.github/actions/post-status@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
+          context: ci
+          state: ${{ job.status == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.finish.outputs.summary || 'ci result' }}

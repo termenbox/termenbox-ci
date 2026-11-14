@@ -256,9 +256,16 @@ jobs:
         run: |
           wrangler pages deploy media --project-name="$PROJECT" --branch="media-$RUN_ID"
 
+      - id: rt-issue
+        name: Token for the next step (issues)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"issues":"write"}'
       - name: Open the review issue
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-issue.outputs.token }}
           GH_REPO: termenbox/termenbox-source
           RUN_ID: ${{ github.run_id }}
         run: |

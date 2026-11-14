@@ -38,10 +38,17 @@ jobs:
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
 
+      - id: rt-s43
+        name: Token for the next step (issues/pull_requests)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"issues":"write","pull_requests":"read"}'
       - name: Check the actor's permission
         id: gate
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-s43.outputs.token }}
           GH_REPO: termenbox/termenbox-source
           EVENT: ${{ github.event.client_payload.event }}
           COMMENT_ID: ${{ github.event.client_payload.comment_id }}
@@ -119,13 +126,21 @@ jobs:
       # The approved files travel in a branch the owner opens as a pull request: a pull request opened with the workflow token would
       # not start CI, and `develop` takes only squashed pull requests with green CI. The branch also fills any media markers already
       # placed in the README and the guide.
+      - id: rt-s127
+        name: Token for the next step (issues/pull_requests)
+        if: steps.ask.outputs.action == 'approve'
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"issues":"write","pull_requests":"read"}'
       - name: Approve
         id: approve
         if: steps.ask.outputs.action == 'approve'
         env:
           APPROVER: ${{ steps.gate.outputs.actor }}
           RUN_ID: ${{ steps.ask.outputs.run_id }}
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-s127.outputs.token }}
           GH_REPO: termenbox/termenbox-source
           ISSUE: ${{ github.event.client_payload.issue }}
           DOCS_TOKEN: ${{ secrets.DOCS_TOKEN }}
@@ -151,10 +166,18 @@ jobs:
           printf 'Approved by %s. Pull request: %s\n' "$APPROVER" "$url" > "$RUNNER_TEMP/reply.md"
           gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/reply.md"
 
+      - id: rt-s156
+        name: Token for the next step (issues/pull_requests)
+        if: steps.ask.outputs.action == 'regen'
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"issues":"write","pull_requests":"read"}'
       - name: Send back
         if: steps.ask.outputs.action == 'regen'
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-s156.outputs.token }}
           GH_REPO: termenbox/termenbox-source
           ISSUE: ${{ github.event.client_payload.issue }}
           CI_TOKEN: ${{ secrets.GITHUB_TOKEN }}

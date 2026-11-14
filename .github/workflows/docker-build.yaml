@@ -323,16 +323,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - shell: bash
+      - id: image
+        shell: bash
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
-          SHA: ${{ github.event.client_payload.sha }}
           PLAN: ${{ needs.plan.result }}
           RUN: ${{ needs.plan.outputs.run }}
           BUILD: ${{ needs.build.result }}
           MANIFEST: ${{ needs.manifest.result }}
         run: |
-          [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
           if [ "$PLAN" != success ] || [ "$BUILD" = failure ] || [ "$BUILD" = cancelled ] || [ "$MANIFEST" = failure ] || [ "$MANIFEST" = cancelled ]; then
             state=failure; desc="image build failed"
           elif [ "$RUN" != true ]; then
@@ -340,5 +338,13 @@ jobs:
           else
             state=success; desc="image built"
           fi
-          gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$state" -f context=image \
-            -f description="$desc" -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null 2>&1 || true
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "desc=$desc" >> "$GITHUB_OUTPUT"
+      - uses: termenbox/termenbox-ci/.github/actions/post-status@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          sha: ${{ github.event.client_payload.sha }}
+          context: image
+          state: ${{ steps.image.outputs.state }}
+          description: ${{ steps.image.outputs.desc }}
