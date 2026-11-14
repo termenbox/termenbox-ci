@@ -43,6 +43,16 @@ jobs:
         run: |
           node sweep/check-pinned-actions.mjs
           node sweep/check-job-environments.mjs
+      - name: No untrusted trigger reaches a secret or an unguarded write token
+        run: node sweep/check-workflow-secrets.mjs
+      - name: No fuzzer or audit job publishes its output
+        run: node sweep/check-security-jobs.mjs
+      - name: Lint the workflows
+        # the version the monthly sweep installs; high findings only, the policy and its reasons are in .github/zizmor.yml
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zizmor"
+          "$RUNNER_TEMP/zizmor/bin/pip" install --quiet zizmor==1.32.0
+          "$RUNNER_TEMP/zizmor/bin/zizmor" --offline --min-severity high --config .github/zizmor.yml .github/workflows
       - name: Tests of the checks and of the Worker triggers
         run: node --test sweep/*.test.mjs scripts/check-action-refs.test.mjs scripts/check-self-refs.test.mjs scripts/check-gate-token.test.mjs scripts/checkout-private.test.mjs scripts/app-token.test.mjs scripts/check-apt-cached-scope.test.mjs scripts/check-pages-group.test.mjs scripts/check-approval-jobs.test.mjs release/verify_origin.test.mjs worker/triggers.test.mjs worker/app-token.test.mjs
       - name: Tests of the release scripts
