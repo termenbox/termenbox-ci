@@ -2,15 +2,16 @@
 // node sweep/check-ci-minutes.mjs : the pull-request runs of ci.yaml do not grow back. Reads the newest successful pull-request
 // runs that built code (a docs-only run skips every job) and fails when, as a median over the newest five,
 //   the job-minutes are above SWEEP_CI_MINUTES (default 90; the plan's target is 75),
-//   the wall time is above SWEEP_CI_WALL_MIN minutes (default 10; the plan's target is 6),
-//   or the longest wait of a job for a runner is above SWEEP_CI_QUEUE_SECS seconds (default 360; the plan's target is 60).
-// The defaults sit just above the reading of 2026-11-13 so that a regression fails; tighten them with the monthly reading
+//   the wall time is above SWEEP_CI_WALL_MIN minutes (default 12; the plan's target is 6),
+//   or the longest wait of a job for a runner (its `started_at` minus its `created_at`, the time it was ready) is above
+//   SWEEP_CI_QUEUE_SECS seconds (default 240; the plan's target is 60). A job that waits for `needs` is not queued.
+// The defaults sit just above the median of the newest five on 2026-11-14 (wall 11.0 min, 72 job-minutes, 144 s) so that a regression fails; tighten them with the monthly reading
 // (docs/plans/ci-pipeline.md in the source repo, step 5.2). It prints nothing; the exit status is the verdict.
 //   SWEEP_GH_REPO  the ci repo (owner/name)
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export const LIMITS = { minutes: 90, wallMin: 10, queueSecs: 360 };
+export const LIMITS = { minutes: 90, wallMin: 12, queueSecs: 240 };
 
 export const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -18,15 +19,16 @@ export const median = (xs) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
-/** One run from `gh run view --json createdAt,updatedAt,jobs` -> { wallMin, minutes, queueSecs }, or null when it built no code. */
+/** One run -> { wallMin, minutes, queueSecs }, or null when it built no code. `run` is { createdAt, updatedAt } of the run
+ *  and `jobs` the REST jobs of it (name, conclusion, created_at, started_at, completed_at). */
 export function reading(run) {
-  const ran = (run.jobs ?? []).filter((j) => j.conclusion !== 'skipped' && j.startedAt && j.completedAt);
+  const ran = (run.jobs ?? []).filter((j) => j.conclusion !== 'skipped' && j.started_at && j.completed_at);
   if (!ran.some((j) => j.name.startsWith('Static binary'))) return null;
   const at = (s) => Date.parse(s);
   return {
     wallMin: (at(run.updatedAt) - at(run.createdAt)) / 60e3,
-    minutes: ran.reduce((n, j) => n + (at(j.completedAt) - at(j.startedAt)) / 60e3, 0),
-    queueSecs: Math.max(...ran.map((j) => (at(j.startedAt) - at(run.createdAt)) / 1e3)),
+    minutes: ran.reduce((n, j) => n + (at(j.completed_at) - at(j.started_at)) / 60e3, 0),
+    queueSecs: Math.max(...ran.map((j) => (at(j.started_at) - at(j.created_at)) / 1e3)),
   };
 }
 
@@ -49,10 +51,11 @@ export function main(env = process.env) {
     queueSecs: Number(env.SWEEP_CI_QUEUE_SECS ?? LIMITS.queueSecs),
   };
   try {
-    const list = gh('run', 'list', '-R', repo, '--workflow', 'ci.yaml', '--status', 'success', '-L', '30', '--json', 'databaseId,displayTitle');
+    const list = gh('run', 'list', '-R', repo, '--workflow', 'ci.yaml', '--status', 'success', '-L', '30', '--json', 'databaseId,displayTitle,createdAt,updatedAt');
     const readings = [];
     for (const r of list.filter((x) => x.displayTitle.startsWith('CI · PR'))) {
-      const one = reading(gh('run', 'view', String(r.databaseId), '-R', repo, '--json', 'createdAt,updatedAt,jobs'));
+      const jobs = gh('api', '--paginate', '--slurp', `repos/${repo}/actions/runs/${r.databaseId}/jobs`).flatMap((page) => page.jobs);
+      const one = reading({ createdAt: r.createdAt, updatedAt: r.updatedAt, jobs });
       if (one) readings.push(one);
       if (readings.length === 5) break;
     }
