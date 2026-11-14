@@ -145,12 +145,55 @@ jobs:
             ${{ secrets.STATUS_TOKEN }}
             ${{ secrets.REVIEWS_TOKEN }}
 
+  # A pull request and a push run a reduced set of browsers and sizes (DECISION-0250); a stable release is built from a
+  # commit the full set has passed. This job asks for that result: a green full run of this exact commit (the daily run
+  # or an earlier try), or it starts one and waits. It holds no secret and runs no code from the source: only the run's own
+  # token, which starts and reads a workflow of this repo, as ci-daily does. A red full run stops the release; the fix is a new
+  # commit, not a rerun.
+  full-ci:
+    name: Full CI
+    needs: gate
+    if: ${{ !cancelled() && needs.gate.result == 'success' && needs.gate.outputs.run == 'true' && needs.gate.outputs.publish == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: A green full run of this commit, or one started now
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          set -eu
+          printf '%s' "$SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "no release commit"; exit 1; }
+          runs() { gh run list --workflow ci.yaml --event workflow_dispatch -L 40 --json databaseId,displayTitle,createdAt,status,conclusion \
+            --jq "[.[] | select(.displayTitle | endswith(\" · $SHA\"))]"; }
+          if [ "$(runs | jq '[.[] | select(.conclusion == "success")] | length')" -gt 0 ]; then
+            echo "a full run of $SHA already passed"; exit 0
+          fi
+          # A full run of this commit that is still going is waited for, not started twice.
+          id=$(runs | jq -r '[.[] | select(.status != "completed")][0].databaseId // empty')
+          if [ -z "$id" ]; then
+            start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            gh workflow run ci.yaml --ref main -f sha="$SHA"
+            for _ in $(seq 1 30); do
+              id=$(runs | jq -r --arg t "$start" '[.[] | select(.createdAt >= $t)][0].databaseId // empty')
+              [ -n "$id" ] && break
+              sleep 10
+            done
+          fi
+          [ -n "$id" ] || { echo "the full run did not start"; exit 1; }
+          gh run watch "$id" --exit-status >/dev/null || { echo "the full run of $SHA is red (run $id): a stable release needs it green"; exit 1; }
+
   # GitHub does not start a workflow for a tag its own token created, and a second run would need its own approvals, so
   # the image is built by calling the workflow in this run. The release waits for the image tag and signs its digests.
   image:
     name: Image
-    needs: gate
-    if: needs.gate.outputs.run == 'true' && needs.gate.outputs.publish == 'true'
+    needs: [gate, full-ci]
+    if: ${{ !cancelled() && needs.gate.result == 'success' && needs.full-ci.result == 'success' && needs.gate.outputs.run == 'true' && needs.gate.outputs.publish == 'true' }}
     permissions:
       contents: read
       packages: write
@@ -165,8 +208,8 @@ jobs:
 
   release:
     name: Release
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
+    needs: [gate, full-ci]
+    if: ${{ !cancelled() && needs.gate.result == 'success' && needs.gate.outputs.run == 'true' && (needs.full-ci.result == 'success' || needs.full-ci.result == 'skipped') }}
     permissions:
       actions: read
       contents: write
