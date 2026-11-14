@@ -21,6 +21,7 @@
 #   SWEEP_MANIFEST_WARN_DAYS  age in days from which a channel's signed manifest fails the manifest-age check, default 60
 #                  (the installer and the updater refuse one older than 90, so this leaves 30 days to sign it again)
 #   SWEEP_CI_IMAGE_DAYS  age in days of the CI image ci.yaml pins, once a newer build exists, from which ci-image-age fails, default 60
+#   SWEEP_CI_MINUTES, SWEEP_CI_WALL_MIN, SWEEP_CI_QUEUE_SECS  limits of the ci-minutes check (median of the newest five pull-request runs), default 90, 10, 360
 #   SWEEP_STATE    file holding the last seen manifest versions (`channel version` lines), read and rewritten by the manifest check
 set -u
 cd "$(dirname "$0")/.."
@@ -50,6 +51,7 @@ manifest-forward${tab}sh sweep/security-sweep.sh --manifest-forward
 manifest-age${tab}sh sweep/security-sweep.sh --manifest-age
 ci-storage${tab}sh sweep/security-sweep.sh --ci-storage
 ci-image-age${tab}node sweep/check-ci-image-age.mjs
+ci-minutes${tab}node sweep/check-ci-minutes.mjs
 EOF
 }
 
