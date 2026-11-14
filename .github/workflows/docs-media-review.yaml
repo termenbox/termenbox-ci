@@ -36,7 +36,7 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@c793fdd572460ac87af14956e6676e4c1dac25f6
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
 
       - name: Check the actor's permission
         id: gate
@@ -70,7 +70,7 @@ jobs:
           perm=$(gh api "repos/termenbox/termenbox-source/collaborators/$ACTOR/permission" --jq .permission 2>/dev/null || echo none)
           case "$perm" in write|maintain|admin) echo "ok=true" >> "$GITHUB_OUTPUT" ;; *) echo "ok=false" >> "$GITHUB_OUTPUT"; echo "ignored: $ACTOR has $perm" ;; esac
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@c793fdd572460ac87af14956e6676e4c1dac25f6
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
@@ -171,7 +171,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@c793fdd572460ac87af14956e6676e4c1dac25f6
+        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           key: ${{ secrets.LOG_KEY }}
           name: review-${{ strategy.job-index }}
