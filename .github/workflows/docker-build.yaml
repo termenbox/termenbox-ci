@@ -305,3 +305,32 @@ jobs:
             ${{ secrets.GHCR_TOKEN }}
             ${{ secrets.LOG_KEY }}
             ${{ secrets.LOG_TOKEN }}
+
+  # The commit status `image` of a pull request or a push (scripts/land.sh requires it with `ci` and `go-getter`). A run
+  # whose plan decides to build nothing reports success with that said, so a change with no image is not refused.
+  status:
+    name: Post the image status
+    needs: [plan, build, manifest]
+    if: ${{ always() && github.event_name == 'repository_dispatch' && (github.event.client_payload.event == 'pull_request' || github.event.client_payload.event == 'push') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          SHA: ${{ github.event.client_payload.sha }}
+          PLAN: ${{ needs.plan.result }}
+          RUN: ${{ needs.plan.outputs.run }}
+          BUILD: ${{ needs.build.result }}
+          MANIFEST: ${{ needs.manifest.result }}
+        run: |
+          [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
+          if [ "$PLAN" != success ] || [ "$BUILD" = failure ] || [ "$BUILD" = cancelled ] || [ "$MANIFEST" = failure ] || [ "$MANIFEST" = cancelled ]; then
+            state=failure; desc="image build failed"
+          elif [ "$RUN" != true ]; then
+            state=success; desc="no image for this change"
+          else
+            state=success; desc="image built"
+          fi
+          gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$state" -f context=image \
+            -f description="$desc" -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null 2>&1 || true
