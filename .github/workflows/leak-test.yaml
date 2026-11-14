@@ -35,6 +35,3 @@ jobs:
         with:
           key: ${{ secrets.LOG_KEY }}
           name: leak
-          status: ${{ job.status }}
-          app-id: ${{ secrets.REPORTER_APP_ID }}
-          app-key: ${{ secrets.REPORTER_APP_KEY }}
