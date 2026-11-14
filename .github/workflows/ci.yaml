@@ -1573,6 +1573,76 @@ jobs:
             ${{ secrets.LOG_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
 
+  # Pushes only: a merge that changed the inputs of an approved video starts one
+  # Docs Media run for those cases, so the owner reviews the new render instead of finding the stale video later. A version
+  # bump changes no input hash and starts nothing. An open review issue that already lists every stale case stops a second run.
+  media-stale:
+    name: Re-render stale media
+    needs: [changes, client]
+    if: github.event.client_payload.event == 'push' && needs.changes.outputs.media == 'true' && needs.client.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+
+      - name: Token to read the review issues
+        id: issues-token
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"issues":"read"}'
+
+      - name: Dispatch Docs Media for the stale cases
+        env:
+          ISSUES_TOKEN: ${{ steps.issues-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cases=$(node scripts/docs-media-stale.mjs --cases)
+          if [ -z "$cases" ]; then echo "No approved video has changed inputs."; exit 0; fi
+          # one review at a time: an open docs-media issue that lists every one of these cases is still waiting for the owner
+          bodies=$(GH_TOKEN="$ISSUES_TOKEN" gh issue list -R termenbox/termenbox-source --label docs-media --state open --json body --jq '.[].body')
+          pending=
+          for c in $cases; do
+            printf '%s\n' "$bodies" | grep -Eq "^- \[.\] $c (phone|desktop) " || pending="$pending $c"
+          done
+          pending=${pending# }
+          if [ -z "$pending" ]; then echo "An open review issue already lists: $cases"; exit 0; fi
+          # a caption change must not wait for the speech engine: without every clip the run renders without the spoken track
+          voice=on
+          if ! (cd packages/client && node e2e/video/voice-sync.mjs --check) >/dev/null 2>&1; then voice=off; echo "Clips are missing: rendering $pending without the spoken track."; fi
+          echo "Rendering: $pending (voice $voice)"
+          gh workflow run docs-media.yaml --ref main -f case="$pending" -f voice="$voice"
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: media-stale-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.REPORTER_APP_KEY }}
+
   ci:
     name: CI result
     if: ${{ always() }}
