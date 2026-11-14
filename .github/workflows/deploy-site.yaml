@@ -41,10 +41,17 @@ jobs:
     outputs:
       run: ${{ steps.g.outputs.run }}
     steps:
+      - id: rt-gate
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
       - id: g
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-gate.outputs.token }}
           EVENT: ${{ github.event.client_payload.event || 'other' }}
           BASE: ${{ github.event.client_payload.base }}
           SHA: ${{ (github.event.client_payload.sha || inputs.sha) }}

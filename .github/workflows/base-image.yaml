@@ -34,10 +34,17 @@ jobs:
     outputs:
       run: ${{ steps.g.outputs.run }}
     steps:
+      - id: rt-c39
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
       - id: g
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-c39.outputs.token }}
           EVENT: ${{ github.event.client_payload.event || 'other' }}
           BASE: ${{ github.event.client_payload.base }}
           SHA: ${{ (github.event.client_payload.sha || inputs.sha) }}
@@ -72,9 +79,16 @@ jobs:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
+      - id: rt-c76
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
       - name: The commit is on master
         env:
-          GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-c76.outputs.token }}
           SHA: ${{ (github.event.client_payload.sha || inputs.sha) }}
         shell: bash
         run: |

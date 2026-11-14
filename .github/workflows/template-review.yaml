@@ -87,9 +87,16 @@ jobs:
           echo "SHA=$sha" >> "$GITHUB_ENV"
           echo "PREVIEW_URL=https://review-$sha.$PROJECT.pages.dev" >> "$GITHUB_ENV"
 
+      - id: rt-s91
+        name: Token for the next step (issues/pull_requests)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"issues":"write","pull_requests":"read"}'
       - name: Open the review issue
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-s91.outputs.token }}
           GH_REPO: termenbox/termenbox-source
           PAGES: ${{ inputs.pages }}
         run: |
@@ -133,10 +140,17 @@ jobs:
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
 
+      - id: rt-s138
+        name: Token for the next step (issues/pull_requests)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"issues":"write","pull_requests":"read"}'
       - name: Check the editor's permission
         id: check
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-s138.outputs.token }}
           GH_REPO: termenbox/termenbox-source
           ISSUE: ${{ github.event.client_payload.issue }}
           ACTOR: ${{ github.event.client_payload.actor }}
@@ -192,16 +206,23 @@ jobs:
         with:
           node-version: '24'
 
+      - id: rt-s196
+        name: Token for the next step (issues/pull_requests)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"issues":"write","pull_requests":"read"}'
       - name: Label and comment on each newly ticked page
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-s196.outputs.token }}
           GH_REPO: termenbox/termenbox-source
           ISSUE: ${{ github.event.client_payload.issue }}
           ACTOR: ${{ needs.gate.outputs.actor }}
         run: |
           case "$ISSUE" in ''|*[!0-9]*) echo "bad ids"; exit 1 ;; esac
           AFTER=$(gh api "repos/termenbox/termenbox-source/issues/$ISSUE" --jq '.body // ""')
-          me=$(gh api user --jq .login)
+          me="termenbox-ci-reporter[bot]"
           BEFORE=$(gh api --paginate "repos/termenbox/termenbox-source/issues/$ISSUE/comments" --jq ".[] | select(.user.login == \"$me\") | .body" \
             | sed -n 's/^Accepted `\([a-z0-9-]*\)` at `\([0-9a-f]*\)`.*/- [x] accept \1 \2/p')
           export BEFORE AFTER

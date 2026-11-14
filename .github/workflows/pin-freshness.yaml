@@ -29,11 +29,18 @@ jobs:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
+      - id: rt-issues
+        name: Token for the next step (issues)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"issues":"write"}'
       - name: Open an issue for each pin that is behind
         env:
-          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GH_TOKEN: ${{ steps.rt-issues.outputs.token }}
           GH_REPO: termenbox/termenbox-source
-          GITHUB_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.rt-issues.outputs.token }}
         run: |
           behind="$({ .github/scripts/check-pins.sh; .github/scripts/check-pins.sh --images; })"
           if [ -z "$behind" ]; then echo "all pins are current"; exit 0; fi
