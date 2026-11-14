@@ -13,7 +13,7 @@ function ciFixture() {
   });
   const f = {
     '': { has_issues: false, has_wiki: false, has_discussions: false },
-    '/actions/permissions': { enabled: true, allowed_actions: 'selected' },
+    '/actions/permissions': { enabled: true, allowed_actions: 'selected', sha_pinning_required: true },
     '/actions/permissions/workflow': { default_workflow_permissions: 'read', can_approve_pull_request_reviews: false },
     '/actions/permissions/selected-actions': { github_owned_allowed: true, verified_allowed: false, patterns_allowed: [`actions/cache/save@${SHA}`, `Swatinem/rust-cache@${SHA}`] },
     '/actions/permissions/fork-pr-contributor-approval': { approval_policy: 'all_external_contributors' },
@@ -65,6 +65,7 @@ test('ci repo: each broken setting names its check', () => {
     [(f) => { f['/actions/permissions'].enabled = false; }, 'actions-enabled-as-intended'],
     [(f) => { f['/actions/permissions/workflow'].default_workflow_permissions = 'write'; }, 'default-workflow-permissions-read'],
     [(f) => { f['/actions/permissions'].allowed_actions = 'all'; }, 'selected-actions-only'],
+    [(f) => { f['/actions/permissions'].sha_pinning_required = false; }, 'sha-pinning-required'],
     [(f) => { f['/actions/permissions/selected-actions'].patterns_allowed.push('actions/checkout@v4'); }, 'selected-actions-pinned'],
     [(f) => { f['/actions/permissions/selected-actions'].patterns_allowed.push('actions/*'); }, 'selected-actions-pinned'],
     [(f) => { f['/actions/permissions/fork-pr-contributor-approval'].approval_policy = 'first_time_contributors'; }, 'fork-pr-approval-all'],

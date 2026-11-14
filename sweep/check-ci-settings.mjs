@@ -80,6 +80,7 @@ export function evaluate(s, spec) {
   need('workflow-cannot-approve-prs', s.workflow?.can_approve_pull_request_reviews === false);
   if (spec.actionsEnabled) {
     need('selected-actions-only', s.actions?.allowed_actions === 'selected');
+    need('sha-pinning-required', s.actions?.sha_pinning_required === true);
     need('selected-actions-pinned',
       !!s.selected && s.selected.verified_allowed !== true && (s.selected.patterns_allowed ?? []).every((p) => p === OWN_REPO_PATTERN || PINNED.test(p)));
     need('fork-pr-approval-all', s.forkApproval?.approval_policy === 'all_external_contributors');

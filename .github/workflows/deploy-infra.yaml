@@ -37,6 +37,14 @@ jobs:
     name: Terraform ${{ github.event.inputs.action }} (cloud)
     runs-on: ubuntu-latest
     environment: cloud
+    env:
+      TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TF_VAR_cloudflare_zone_name: ${{ vars.CLOUDFLARE_ZONE_NAME }}
+      TF_VAR_release_account_id: ${{ vars.R2_RELEASE_ACCOUNT_ID }}
+      TF_VAR_r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
+      TF_VAR_r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      TF_VAR_pages_project_name: ${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}
     defaults:
       run:
         shell: quiet {0}
@@ -80,13 +88,7 @@ jobs:
             printf 'terraform {\n  backend "local" {\n    path = "terraform.tfstate"\n  }\n}\n' > backend_override.tf
             terraform init -input=false
             terraform apply -input=false -auto-approve \
-              -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-              -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
-              -target=cloudflare_r2_bucket.terraform_state \
-              -var="cloudflare_zone_name=${{ vars.CLOUDFLARE_ZONE_NAME }}" \
-              -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
-              -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}" \
-              -var="pages_project_name=${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}"
+              -target=cloudflare_r2_bucket.terraform_state
             rm backend_override.tf
             
             # Now init with R2 backend and migrate state
@@ -108,14 +110,7 @@ jobs:
       - name: Terraform Plan
         if: github.event.inputs.action == 'plan'
         run: |
-          terraform plan -input=false -out=tfplan \
-            -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-            -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
-            -var="cloudflare_zone_name=${{ vars.CLOUDFLARE_ZONE_NAME }}" \
-            -var="release_account_id=${{ vars.R2_RELEASE_ACCOUNT_ID }}" \
-            -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
-            -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}" \
-            -var="pages_project_name=${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}"
+          terraform plan -input=false -out=tfplan
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
@@ -125,14 +120,7 @@ jobs:
           if [ -f tfplan ]; then
             terraform apply -input=false tfplan
           else
-            terraform apply -input=false -auto-approve \
-              -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-              -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
-              -var="cloudflare_zone_name=${{ vars.CLOUDFLARE_ZONE_NAME }}" \
-              -var="release_account_id=${{ vars.R2_RELEASE_ACCOUNT_ID }}" \
-              -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
-              -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}" \
-              -var="pages_project_name=${{ vars.TERMENBOX_PAGES_PROJECT_NAME }}"
+            terraform apply -input=false -auto-approve
           fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
