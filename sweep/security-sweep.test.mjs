@@ -53,7 +53,7 @@ test('only the report job of the workflow holds the token that can write issues'
   const jobs = Object.fromEntries(splitJobs(text).jobs.map((j) => [j.name, j.text]));
   assert.ok(jobs.report.includes('secrets.SWEEP_TOKEN'));
   const secretsIn = (t) => [...t.matchAll(/secrets\.([A-Z_]+)/g)].map((m) => m[1]);
-  assert.deepEqual(secretsIn(jobs.tools), ['SOURCE_TOKEN']);
+  assert.deepEqual(secretsIn(jobs.tools), ['REPORTER_APP_ID', 'REPORTER_APP_KEY']);
   assert.ok(!/environment:/.test(jobs.tools), 'the tools job runs source code and so holds no Environment');
   for (const name of ['state', 'sweep']) {
     assert.ok(!jobs[name].includes('secrets.SWEEP_TOKEN'), name);
