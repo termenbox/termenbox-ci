@@ -1,0 +1,28 @@
+name: Post a commit status
+description: Posts a commit status on the source with a statuses-write token of one hour minted from the reporter app. Posting is a courtesy, so a failure is silent and leaves the job result alone.
+inputs:
+  app-id: { description: "The reporter app's id (secret REPORTER_APP_ID)", required: true }
+  app-key: { description: "The reporter app's private key (secret REPORTER_APP_KEY)", required: true }
+  sha: { description: Commit to mark, required: true }
+  context: { description: "Status context: ci, image, go-getter or docs", required: true }
+  state: { description: "pending, success, failure or error", required: true }
+  description: { description: Short text shown next to the status, default: '' }
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        APP_ID: ${{ inputs.app-id }}
+        APP_KEY: ${{ inputs.app-key }}
+        SHA: ${{ inputs.sha }}
+        CONTEXT: ${{ inputs.context }}
+        STATE: ${{ inputs.state }}
+        DESC: ${{ inputs.description }}
+        TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        [ -n "$APP_ID" ] && [ -n "$APP_KEY" ] && [ -n "$SHA" ] || exit 0
+        case "$SHA" in *[!0-9a-f]*) exit 0 ;; esac
+        GH_TOKEN=$(MINT_STDOUT=1 REPO=termenbox/termenbox-source PERMISSIONS='{"statuses":"write"}' bash "$GITHUB_ACTION_PATH/../app-token/mint.sh" 2>/dev/null) || exit 0
+        export GH_TOKEN
+        gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$STATE" -f context="$CONTEXT" \
+          -f description="$DESC" -f target_url="$TARGET" >/dev/null 2>&1 || true

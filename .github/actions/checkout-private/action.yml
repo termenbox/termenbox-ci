@@ -2,6 +2,8 @@ name: Check out the source
 description: Clones termenbox/termenbox-source at a sha with a read-only token, silently, and keeps no credentials.
 inputs:
   sha: { description: "Commit to check out; empty means the head of develop", default: "" }
+  app-id: { description: "The reporter app's id (secret REPORTER_APP_ID): a read-only token of one hour is minted for the source in place of `token`", default: '' }
+  app-key: { description: "The reporter app's private key (secret REPORTER_APP_KEY)", default: '' }
   token: { description: Read-only token for the source repo, required: true }
   path: { description: Directory to clone into, default: . }
   depth: { description: "Fetch depth; 0 fetches the whole history", default: "1" }
@@ -14,6 +16,8 @@ runs:
     - shell: bash
       env:
         TOKEN: ${{ inputs.token }}
+        APP_ID: ${{ inputs.app-id }}
+        APP_KEY: ${{ inputs.app-key }}
         SHA: ${{ inputs.sha }}
         BASE: ${{ inputs.base }}
         DEST: ${{ inputs.path }}
@@ -22,6 +26,10 @@ runs:
         BRANCH: ${{ inputs.branch }}
       run: |
         set +x
+        if [ -n "$APP_ID" ]; then
+          TOKEN=$(MINT_STDOUT=1 REPO=termenbox/termenbox-source PERMISSIONS='{"contents":"read"}' bash "$GITHUB_ACTION_PATH/../app-token/mint.sh" 2>&1) || { echo "$TOKEN"; exit 1; }
+          echo "::add-mask::$TOKEN"
+        fi
         for v in "$SHA" "$BASE"; do case "$v" in *[!0-9a-f]*) echo "bad sha"; exit 1;; esac; done
         refspecs=""
         for b in $FETCH; do case "$b" in ''|*[!A-Za-z0-9._-]*) echo "bad branch"; exit 1;; esac; refspecs="$refspecs +refs/heads/$b:refs/remotes/origin/$b"; done

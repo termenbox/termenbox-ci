@@ -3,7 +3,7 @@
 // credential may sit in .git/config, and a branch asked for in `fetch` is there as refs/remotes/origin/<branch>.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -67,4 +67,44 @@ test('a branch name that is not a plain name is refused', () => {
   const r = run(f, { SHA: f.sha, FETCH: 'master;touch x' });
   assert.notEqual(r.status, 0);
   assert.match(r.stdout, /bad branch/);
+});
+
+test('with a reporter app a read-only token is minted and no credential is left', async () => {
+  const http = await import('node:http');
+  const { generateKeyPairSync } = await import('node:crypto');
+  const pem = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' });
+  const asked = [];
+  const server = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (c) => (b += c));
+    req.on('end', () => {
+      asked.push({ url: req.url, body: b });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(req.url.endsWith('/installation') ? { id: 7 } : { token: 'ghs_minted0123456789', expires_at: '2099-01-01T00:00:00Z' }));
+    });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    const f = fixture();
+    const minted = 'ghs_minted0123456789';
+    const dest = join(f.root, 'app-out');
+    const url = `https://x-access-token:${minted}@github.com/termenbox/termenbox-source.git`;
+    const r = await new Promise((resolve) => {
+      const p = spawn('bash', ['-c', script], { env: {
+        PATH: process.env.PATH, HOME: f.root, TOKEN: '', APP_ID: '55', APP_KEY: pem, SHA: f.sha, BASE: '', DEST: dest, DEPTH: '1', FETCH: '', BRANCH: 'develop',
+        GITHUB_API_URL: `http://127.0.0.1:${server.address().port}`, GITHUB_ACTION_PATH: new URL('../.github/actions/checkout-private', import.meta.url).pathname,
+        GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null',
+        GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: `url.${f.bare}.insteadOf`, GIT_CONFIG_VALUE_0: url,
+      } });
+      let stdout = '', stderr = '';
+      p.stdout.on('data', (c) => (stdout += c));
+      p.stderr.on('data', (c) => (stderr += c));
+      p.on('close', (status) => resolve({ status, stdout, stderr }));
+    });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(git(dest, 'rev-parse', 'HEAD'), f.sha);
+    assert.deepEqual(JSON.parse(asked[1].body), { repositories: ['termenbox-source'], permissions: { contents: 'read' } });
+    assert.ok(!readFileSync(join(dest, '.git', 'config'), 'utf8').includes(minted));
+    assert.ok(!r.stdout.includes(minted.slice(4)) || r.stdout.includes('::add-mask::'));
+  } finally { server.close(); }
 });
