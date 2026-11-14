@@ -30,7 +30,7 @@ env:
 # This file is canonical for the build setup: release-build.yaml follows it (same cargo env, same cache keys, the
 # bundled tmux restored from what the tmux job saved) and never writes the caches itself.
 concurrency:
-  group: ci-${{ github.event.client_payload.event }}-${{ github.event.client_payload.event == 'push' && (github.event.client_payload.sha || inputs.sha) || format('pr-{0}', github.event.client_payload.pr) }}
+  group: ci-${{ github.event.client_payload.event || 'manual' }}-${{ github.event.client_payload.event == 'pull_request' && format('pr-{0}', github.event.client_payload.pr) || (github.event.client_payload.sha || inputs.sha) }}
   cancel-in-progress: ${{ github.event.client_payload.event == 'pull_request' }}
 
 # Caches (Swatinem/rust-cache) are written only by pushes to master/develop (save-if). A PR restores from its base
@@ -40,9 +40,10 @@ concurrency:
 #   changes                                       (what the pull request touches: docs only skips every job, server-only skips `browsers`)
 #   client                                        (typecheck, build, unit tests, bundle gate)
 #   rust-lint | rust-build | rust-test            (three cargo jobs in parallel instead of one long chain)
-#   browsers                                      (scripted servers, no binary: starts immediately)
-#   e2e, browsers-real        needs rust-build    (real server binary)
-#   static (x86_64, aarch64) -> e2e-static, installer (+ tmux)
+#   browsers                                      (scripted servers, no binary: builds its own pages and starts at once)
+#   pages                                         (the client and probe pages, built once beside rust-build)
+#   e2e, browsers-real        needs rust-build, pages, tmux (real server binary, the bundled tmux)
+#   static (x86_64, aarch64) -> e2e-static (+ pages, tmux), installer (+ tmux)
 #   ci                                            (single result for branch protection)
 
 jobs:
@@ -111,13 +112,12 @@ jobs:
             gh api --paginate "repos/termenbox/termenbox-source/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)' > paths.txt || : > paths.txt
             sh .github/scripts/ci-scope.sh < paths.txt | tee -a "$GITHUB_OUTPUT"
             echo 'smoke=false' | tee -a "$GITHUB_OUTPUT"
-            # A pull request runs Chromium always and WebKit only when the client changed (WebKit is the proxy for
-            # iOS Safari 16.4+); Firefox and the aarch64 binary run on the daily run. An empty lookup counts as a
-            # client change.
-            if [ ! -s paths.txt ] || grep -q '^packages/client/' paths.txt; then
-              echo '[{"engine":"firefox"}]' > skip.json
-            else
-              echo '[{"engine":"firefox"},{"engine":"webkit"}]' > skip.json
+            # A pull request runs one desktop and one phone size, not every size: Chromium at 1440x900, WebKit (the proxy for
+            # iOS Safari 16.4+) at 1440x900 and on the phone, only when the client changed, and the real server on Chromium
+            # and the WebKit phone. The 1024x768 legs, the WebKit desktop real-server leg and Firefox run on the daily run. An empty lookup counts as a client change.
+            printf '%s\n' '[{"engine":"firefox"},{"engine":"chromium","runs":"desktop:1024x768:1"},{"engine":"webkit","runs":"desktop:1024x768:1:1/2"},{"engine":"webkit","runs":"desktop:1024x768:1:2/2"},{"name":"webkit-desktop"}]' > skip.json
+            if [ -s paths.txt ] && ! grep -q '^packages/client/' paths.txt; then
+              echo '[{"engine":"firefox"},{"engine":"webkit"},{"engine":"chromium","runs":"desktop:1024x768:1"}]' > skip.json
             fi
             echo '[{"arch":"aarch64"}]' > skip_static.json
           fi
@@ -418,12 +418,24 @@ jobs:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
+      # The server binary depends on the Rust sources, the lockfile and the relay files and the tmux build script it embeds, not on the client: a pull request
+      # that leaves them as they are on develop takes the binary a push to develop built, and starts the browser jobs a minute
+      # sooner. The key is the content of those inputs; a push that builds saves it, a pull request only restores.
+      - name: Restore the server binary of these sources
+        id: bin
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/ci/termenbox-server
+          key: server-bin-ci-${{ hashFiles('packages/server/**', 'packages/core/**', 'packages/agent/**', 'packages/bridge-contract/**', 'Cargo.toml', 'Cargo.lock', 'infra/owner-relay/dist/**', '.github/scripts/build-tmux.sh') }}
+
       - name: Install Rust toolchain
+        if: steps.bin.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - if: steps.bin.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           shared-key: rust-ci
           save-if: ${{ github.event.client_payload.event == 'push' }}
@@ -431,7 +443,15 @@ jobs:
       # The ci profile (Cargo.toml) skips fat LTO and single-threaded codegen: the browser jobs need a working server
       # fast, and the shipped bytes are the static builds below.
       - name: Build workspace
+        if: steps.bin.outputs.cache-hit != 'true'
         run: cargo build --workspace --profile ci
+
+      - name: Save the server binary of these sources
+        if: github.event.client_payload.event == 'push' && steps.bin.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/ci/termenbox-server
+          key: ${{ steps.bin.outputs.cache-primary-key }}
 
       - name: Keep the server binary for the browser end-to-end job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -509,6 +529,63 @@ jobs:
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
 
+  # The client and the probe pages the jobs that wait for the server binary drive, built once beside `rust-build`. Each of
+  # them used to run `pnpm install` and `e2e:build` itself (about a minute); they now download this. `browsers` has no
+  # predecessor and is on the critical path, so it builds its own pages and does not wait for this job.
+  pages:
+    name: Client pages for the browser jobs
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && (needs.changes.outputs.smoke != 'true' || needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@c793fdd572460ac87af14956e6676e4c1dac25f6
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@c793fdd572460ac87af14956e6676e4c1dac25f6
+        with:
+          sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
+          token: ${{ secrets.SOURCE_TOKEN }}
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: ${{ github.event.client_payload.event == 'push' && 'pnpm' || '' }}
+
+      - if: github.event.client_payload.event != 'push'
+        uses: ./.github/actions/pnpm-restore
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter termenbox-client run e2e:build
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: client-pages
+          path: |
+            packages/client/dist
+            packages/client/e2e/dist
+          retention-days: 1
+          if-no-files-found: error
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@c793fdd572460ac87af14956e6676e4c1dac25f6
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: pages-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          log-token: ${{ secrets.LOG_TOKEN }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.LOG_TOKEN }}
+            ${{ secrets.SOURCE_TOKEN }}
+
   # Real Chrome against the real server binary: login and claim over WebRTC, typing, reconnect with screen replay,
   # plus the resource gates (server RSS with 10 sessions, CPU while output streams). Only GitHub is a stand-in.
   #
@@ -516,7 +593,7 @@ jobs:
   # add a number to `shard`.
   e2e:
     name: Browser end-to-end and resource gates (${{ matrix.shard }}/${{ strategy.job-total }})
-    needs: [changes, rust-build]
+    needs: [changes, rust-build, pages, tmux]
     if: needs.changes.outputs.smoke != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -546,10 +623,21 @@ jobs:
       - if: github.event.client_payload.event != 'push'
         uses: ./.github/actions/pnpm-restore
 
-      - run: pnpm install --frozen-lockfile
+      # Only the client package: the scripts import playwright-core; the pages come from the `pages` job.
+      - run: pnpm install --frozen-lockfile --filter termenbox-client --ignore-scripts
 
-      - name: Install tmux
-        run: sudo apt-get update && sudo apt-get install -y tmux
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: tmux-musl-x86_64
+          path: ${{ runner.temp }}/tmux-bin
+
+      # The tmux the product bundles (and users run), not the distribution's: the browser scripts drive real sessions with it.
+      - name: Put the bundled tmux first on PATH
+        shell: bash
+        run: |
+          chmod +x "$RUNNER_TEMP/tmux-bin/tmux"
+          echo "$RUNNER_TEMP/tmux-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/tmux-bin/tmux" -V
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -558,7 +646,13 @@ jobs:
 
       - run: chmod +x bin/termenbox-server
 
-      - run: pnpm --filter termenbox-client run e2e:build
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: client-pages
+          path: packages/client
+
+      - name: Check the built pages
+        run: test -f packages/client/dist/index.html && test -d packages/client/e2e/dist
 
       - name: Browser end-to-end scripts and resource gates (e2e/suite.mjs lists them)
         working-directory: packages/client
@@ -693,7 +787,7 @@ jobs:
   # binary has no glibc dependency and is also the production binary, so this matches what users install.
   browsers-real:
     name: Browser matrix, real server (${{ matrix.name }})
-    needs: [changes, rust-build, static]
+    needs: [changes, rust-build, static, pages]
     if: needs.changes.outputs.smoke != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -725,7 +819,8 @@ jobs:
       - if: github.event.client_payload.event != 'push'
         uses: ./.github/actions/pnpm-restore
 
-      - run: pnpm install --frozen-lockfile
+      # Only the client package: the scripts import playwright-core; the pages come from the `pages` job.
+      - run: pnpm install --frozen-lockfile --filter termenbox-client --ignore-scripts
 
       # Chromium leg keeps using the dynamic build from rust-build (it runs on the bare ubuntu-latest runner
       # where glibc 2.39 is available). The container legs use the static musl build (no glibc dependency).
@@ -743,7 +838,13 @@ jobs:
 
       - run: chmod +x bin/termenbox-server
 
-      - run: pnpm --filter termenbox-client run e2e:build
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: client-pages
+          path: packages/client
+
+      - name: Check the built pages
+        run: test -f packages/client/dist/index.html && test -d packages/client/e2e/dist
 
       - name: Run the scripts (suite:size:ratio list from the matrix)
         shell: bash
@@ -912,7 +1013,7 @@ jobs:
   # directory announce) cannot reach a release unnoticed.
   e2e-static:
     name: Browser end-to-end with the static binary
-    needs: [changes, static]
+    needs: [changes, static, pages, tmux]
     if: needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -938,10 +1039,21 @@ jobs:
       - if: github.event.client_payload.event != 'push'
         uses: ./.github/actions/pnpm-restore
 
-      - run: pnpm install --frozen-lockfile
+      # Only the client package: the scripts import playwright-core; the pages come from the `pages` job.
+      - run: pnpm install --frozen-lockfile --filter termenbox-client --ignore-scripts
 
-      - name: Install tmux
-        run: sudo apt-get update && sudo apt-get install -y tmux
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: tmux-musl-x86_64
+          path: ${{ runner.temp }}/tmux-bin
+
+      # The tmux the product bundles (and users run), not the distribution's: the browser scripts drive real sessions with it.
+      - name: Put the bundled tmux first on PATH
+        shell: bash
+        run: |
+          chmod +x "$RUNNER_TEMP/tmux-bin/tmux"
+          echo "$RUNNER_TEMP/tmux-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/tmux-bin/tmux" -V
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -950,7 +1062,13 @@ jobs:
 
       - run: chmod +x bin/termenbox-server
 
-      - run: pnpm --filter termenbox-client run e2e:build
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: client-pages
+          path: packages/client
+
+      - name: Check the built pages
+        run: test -f packages/client/dist/index.html && test -d packages/client/e2e/dist
 
       - name: Run the browser end-to-end test
         working-directory: packages/client
@@ -983,15 +1101,14 @@ jobs:
   tmux:
     name: Bundled tmux (static, ${{ matrix.arch }})
     needs: changes
-    if: needs.changes.outputs.code == 'true' && (needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false')
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { arch: x86_64, runner: ubuntu-latest }
-          - { arch: aarch64, runner: ubuntu-24.04-arm }
+        # The legs of the static binary (a pull request skips aarch64: its tmux is a cache hit nobody downloads there).
+        include: ${{ fromJSON(needs.changes.outputs.static_matrix) }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
@@ -1414,6 +1531,7 @@ jobs:
           for g in rust-lint rust-ci rust-test static-x86_64 static-aarch64; do
             .github/scripts/prune-caches.sh "v0-rust-$g-" 1
           done
+          .github/scripts/prune-caches.sh server-bin-ci- 2
           for g in static-x86_64 static-aarch64 tmux-x86_64 tmux-aarch64; do
             .github/scripts/prune-caches.sh "apt-$g-" 1
           done
@@ -1436,7 +1554,7 @@ jobs:
   ci:
     name: CI result
     if: ${{ always() }}
-    needs: [changes, security-surface, supply-chain, commit-ids, client, rust-lint, rust-build, rust-test, e2e, browsers, browsers-real, static, e2e-static, tmux, installer, container-installer]
+    needs: [changes, security-surface, supply-chain, commit-ids, client, rust-lint, rust-build, rust-test, pages, e2e, browsers, browsers-real, static, e2e-static, tmux, installer, container-installer]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

@@ -20,11 +20,16 @@ const repo = { full_name: "termenbox/termenbox-source" };
 const A = "a".repeat(40), B = "b".repeat(40), Z = "0".repeat(40);
 const prOn = (base) => ({ repository: repo, action: "synchronize", pull_request: { number: 7, head: { sha: A, repo }, base: { sha: B, ref: base } } });
 const review = (label) => ({ number: 7, labels: [{ name: label }] });
-const PUSHED = ["ci", "go-getter-checks", "ci-image", "docker-build"];
+const PUSHED = ["ci", "go-getter-checks", "docker-build"];
+const files = (...f) => [{ added: [], modified: f, removed: [] }];
 
 const rows = [
-  ["push to develop", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B }, PUSHED],
-  ["push to master", "push", { repository: repo, ref: "refs/heads/master", after: A, before: B }, [...PUSHED, "base-image", "deploy-site"]],
+  ["push to develop", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: files("README.md") }, PUSHED],
+  ["push to develop that changes the CI image", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: files("docker/Dockerfile.ci") }, [...PUSHED, "ci-image"]],
+  ["push to develop with a commit that lists no file (a merge)", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: [{ added: [], modified: [], removed: [] }] }, [...PUSHED, "ci-image"]],
+  ["push to develop with no list of files", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B }, [...PUSHED, "ci-image"]],
+  ["push to develop with a full list of commits", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: Array.from({ length: 20 }, () => files("README.md")[0]) }, [...PUSHED, "ci-image"]],
+  ["push to master", "push", { repository: repo, ref: "refs/heads/master", after: A, before: B, commits: files("README.md") }, [...PUSHED, "base-image", "deploy-site"]],
   ["pull request to develop", "pull_request", prOn("develop"), PUSHED],
   ["pull request to master", "pull_request", prOn("master"), PUSHED],
   ["tag v*", "push", { repository: repo, ref: "refs/tags/v1.2.3", after: A, before: Z }, ["release-stable", "release-beta", "docs-media"]],
@@ -48,5 +53,5 @@ assert.equal(plan("pull_request", prOn("feature/x")), null);
 // a workflow that listens to a type nothing sends would never run
 for (const [w, types] of Object.entries(listens)) for (const t of types) assert.ok(produced.has(t), `${w} listens to ${t}, which no row produces`);
 // a workflow driven by a source push or pull request can be started by hand on a source commit, to test a change to the workflow itself
-for (const w of PUSHED.concat(["base-image", "deploy-site"])) assert.ok(manual[w] && manual[w].dispatch && manual[w].sha, `${w} has no workflow_dispatch input sha`);
+for (const w of PUSHED.concat(["ci-image", "base-image", "deploy-site"])) assert.ok(manual[w] && manual[w].dispatch && manual[w].sha, `${w} has no workflow_dispatch input sha`);
 console.log("triggers: ok");

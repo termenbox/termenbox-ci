@@ -66,9 +66,27 @@ export function plan(event, p) {
 // The dispatch types to send for a planned event: a workflow listens only to the types it needs (its `on.repository_dispatch.types`),
 // so a tag-only or master-only workflow gets no run, and holds no runner, for a push it would skip. worker/triggers.test.mjs
 // pins which workflows listen to which type: change a type and a workflow together.
+// The CI image is rebuilt only for a push that changes its Dockerfile (its own gate decides again), so the other pushes, a pull
+// request and a comment send it nothing and it holds no runner. A push event lists the files of at most 20 commits; a list that is
+// missing, at its limit, or empty for a commit (a merge commit lists none) may hide the file, so it counts as a change.
+const IMAGE_FILES = new Set(["docker/Dockerfile.ci"]);
+export function mayChangeImage(p) {
+  const commits = Array.isArray(p.commits) ? p.commits : [];
+  if (commits.length === 0 || commits.length >= 20) return true;
+  return commits.some((c) => {
+    const lists = c ? [c.added, c.modified, c.removed] : [];
+    if (lists.length !== 3 || !lists.every(Array.isArray)) return true;
+    const files = lists.flat();
+    return files.length === 0 || files.some((f) => IMAGE_FILES.has(f));
+  });
+}
+
 export function typesFor(cp, p) {
   if (cp.event === "tag") return ["source-tag"];
-  if (cp.event === "push") return p.ref === "refs/heads/master" ? ["source-pushed", "source-master"] : ["source-pushed"];
+  if (cp.event === "push") {
+    const types = p.ref === "refs/heads/master" ? ["source-pushed", "source-master"] : ["source-pushed"];
+    return mayChangeImage(p) ? [...types, "source-image"] : types;
+  }
   if (cp.event === "pull_request") return ["source-pushed"];
   return ["source-comment"];
 }

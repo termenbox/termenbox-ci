@@ -6,7 +6,7 @@ run-name: "Build CI Image · ${{ github.event.client_payload.pr && format('PR #{
 # start FROM it and skip the apt install that used to stall on azure.archive.ubuntu.com.
 on:
   repository_dispatch:
-    types: [source-pushed]
+    types: [source-image]
   schedule:
     - cron: '17 4 * * 1'
   workflow_dispatch:
