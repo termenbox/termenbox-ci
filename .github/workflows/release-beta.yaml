@@ -54,10 +54,10 @@ jobs:
       docker_tags: ${{ steps.g.outputs.docker_tags }}
       publish: ${{ steps.g.outputs.publish }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@97805a74052190f48fd211a681c2feacf054eac3
-      - uses: termenbox/termenbox-ci/.github/actions/release-tools@97805a74052190f48fd211a681c2feacf054eac3
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@97805a74052190f48fd211a681c2feacf054eac3
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
@@ -120,7 +120,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@97805a74052190f48fd211a681c2feacf054eac3
+        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
           key: ${{ secrets.LOG_KEY }}
           name: gate-${{ strategy.job-index }}
