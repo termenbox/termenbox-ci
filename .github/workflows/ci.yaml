@@ -183,6 +183,7 @@ jobs:
     timeout-minutes: 15
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
+      docs: ${{ steps.docs.outcome }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@c793fdd572460ac87af14956e6676e4c1dac25f6
 
@@ -212,6 +213,7 @@ jobs:
         run: node scripts/check-site.mjs
 
       - name: Check the docs (generated blocks, install commands, the wiki build, links, drift)
+        id: docs
         run: |
           node scripts/docs-gen.mjs --self-test
           node scripts/check-commands.mjs --self-test
@@ -1615,3 +1617,20 @@ jobs:
           [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
           gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$STATE" -f context=ci \
             -f description="$DESC" -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null 2>&1 || true
+
+      # The commit status `docs` (scripts/land.sh requires it): the docs checks of the client job. A change that leaves the
+      # client job rightly skipped (plans and other docs the checks do not read) has nothing for them to check.
+      - if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.STATUS_TOKEN }}
+          SHA: ${{ github.event.client_payload.sha }}
+          CLIENT: ${{ needs.client.result }}
+          DOCS: ${{ needs.client.outputs.docs }}
+        run: |
+          [ -n "$GH_TOKEN" ] && [ -n "$SHA" ] || exit 0
+          if [ "$DOCS" = success ]; then state=success; desc="docs checks passed"
+          elif [ "$CLIENT" = skipped ]; then state=success; desc="no docs checks for this change"
+          else state=failure; desc="docs checks failed or were not reached"; fi
+          gh api -X POST "repos/termenbox/termenbox-source/statuses/$SHA" -f state="$state" -f context=docs \
+            -f description="$desc" -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null 2>&1 || true
