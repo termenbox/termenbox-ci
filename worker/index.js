@@ -1,7 +1,11 @@
 // Receives the private repo's GitHub webhooks and starts the ci repo. Holds no source and spends no Actions minutes.
-// Secrets (Worker secrets): WEBHOOK_SECRET (shared with the webhook), DISPATCH_TOKEN (contents write on the ci repo).
+// Secrets (Worker secrets): WEBHOOK_SECRET (shared with the webhook), DISPATCHER_APP_ID and DISPATCHER_APP_KEY (the PKCS#8 key of
+// the dispatcher app, contents write on the ci repo only; a token of one hour is minted from them). DISPATCH_TOKEN (a personal
+// token) is used only while the app's secrets are not set, and goes with the cutover.
 // Only the sha, the base sha, the pull request number, the event kind and (for a tag) the tag name leave this Worker:
 // never a branch name, title, message or author.
+
+import { installationToken } from "./app-token.js";
 
 const CI_REPO = "termenbox/termenbox-ci";
 // The source is renamed in two steps; both names are accepted until every reference follows the new one.
@@ -107,11 +111,22 @@ export default {
     const client_payload = plan(event, payload);
     if (!client_payload) return new Response("ignored", { status: 202 });
     let failed = 0;
+    let token = env.DISPATCH_TOKEN;
+    let how = "";
+    if (env.DISPATCHER_APP_ID && env.DISPATCHER_APP_KEY) {
+      try {
+        token = await installationToken({ appId: env.DISPATCHER_APP_ID, pem: env.DISPATCHER_APP_KEY, repo: CI_REPO, permissions: { contents: "write" } });
+      } catch {
+        // While the personal token is still set a failed mint falls back to it, so a bad rollout does not stop every run.
+        if (!env.DISPATCH_TOKEN) return new Response("no dispatch token", { status: 502 });
+        how = " (personal token: the app token failed)";
+      }
+    }
     for (const event_type of typesFor(client_payload, payload)) {
       const res = await fetch(`https://api.github.com/repos/${CI_REPO}/dispatches`, {
         method: "POST",
         headers: {
-          authorization: `Bearer ${env.DISPATCH_TOKEN}`,
+          authorization: `Bearer ${token}`,
           accept: "application/vnd.github+json",
           "user-agent": "termenbox-ci-hook",
           "content-type": "application/json",
@@ -120,6 +135,6 @@ export default {
       });
       if (!res.ok) failed = res.status;
     }
-    return new Response(failed ? `dispatch failed: ${failed}` : "dispatched", { status: failed ? 502 : 202 });
+    return new Response(failed ? `dispatch failed: ${failed}` : `dispatched${how}`, { status: failed ? 502 : 202 });
   },
 };

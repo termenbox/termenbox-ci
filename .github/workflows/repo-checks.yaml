@@ -41,7 +41,7 @@ jobs:
           node sweep/check-pinned-actions.mjs
           node sweep/check-job-environments.mjs
       - name: Tests of the checks and of the Worker triggers
-        run: node --test sweep/*.test.mjs scripts/check-action-refs.test.mjs scripts/check-self-refs.test.mjs scripts/check-gate-token.test.mjs scripts/checkout-private.test.mjs scripts/check-apt-cached-scope.test.mjs scripts/check-pages-group.test.mjs scripts/check-approval-jobs.test.mjs release/verify_origin.test.mjs worker/triggers.test.mjs
+        run: node --test sweep/*.test.mjs scripts/check-action-refs.test.mjs scripts/check-self-refs.test.mjs scripts/check-gate-token.test.mjs scripts/checkout-private.test.mjs scripts/check-apt-cached-scope.test.mjs scripts/check-pages-group.test.mjs scripts/check-approval-jobs.test.mjs release/verify_origin.test.mjs worker/triggers.test.mjs worker/app-token.test.mjs
       - name: Tests of the release scripts
         run: |
           for t in release/test-*.sh; do echo "$t"; sh "$t" > /dev/null; done

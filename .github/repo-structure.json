@@ -43,9 +43,13 @@
       "actions": true,
       "secrets": [
         "CLOUDFLARE_WORKERS_TOKEN",
+        "DISPATCHER_APP_ID",
+        "DISPATCHER_APP_KEY",
         "DISPATCH_TOKEN",
         "LOG_KEY",
         "LOG_TOKEN",
+        "REPORTER_APP_ID",
+        "REPORTER_APP_KEY",
         "SOURCE_TOKEN",
         "STATUS_TOKEN",
         "WEBHOOK_SECRET"
