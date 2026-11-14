@@ -63,7 +63,7 @@ jobs:
           token: ${{ secrets.SOURCE_TOKEN }}
           depth: 0
           base: ${{ github.event.client_payload.base }}
-          remote: true
+          fetch: develop
       - id: s
         env:
           GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
@@ -74,7 +74,6 @@ jobs:
           EVENT: ${{ (github.event.client_payload.event || github.event_name) }}
           DISPATCH_PUBLISH: ${{ inputs.publish }}
         run: |
-          git fetch -q origin develop
           sha=""; for c in $(gh api "repos/termenbox/termenbox-source/commits?sha=develop&per_page=30" --jq '.[].sha'); do
           n="$(GH_TOKEN="$STATUS_TOKEN" gh api "repos/termenbox/termenbox-source/commits/$c/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
           if [ "${n:-0}" -gt 0 ]; then sha="$c"; break; fi
@@ -208,7 +207,6 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
       - name: Delete nightlies older than 14 days (never the alias target)
         env:
           GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}

@@ -14,6 +14,7 @@ jobs:
       SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
       STATUS_TOKEN: ${{ secrets.STATUS_TOKEN }}
       DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+      LOG_TOKEN: ${{ secrets.LOG_TOKEN }}
       CF_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
       CF_ACCOUNT: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       LOG_KEY: ${{ secrets.LOG_KEY }}
@@ -38,6 +39,15 @@ jobs:
 
           expect "DISPATCH_TOKEN dispatches to the ci repo" "$(api "$DISPATCH_TOKEN" POST repos/termenbox/termenbox-ci/dispatches '{"event_type":"token-check"}')" 204
           expect "DISPATCH_TOKEN cannot see the private repo" "$(api "$DISPATCH_TOKEN" GET repos/$SRC)" '403|404'
+
+          # The ruleset lets only the owner create a branch or move main here. A refused attempt returns 403 or 422; the main
+          # attempt is a no-op even if it were allowed (it sets main to where it already is).
+          main=$(curl -s "https://api.github.com/repos/termenbox/termenbox-ci/commits/main" | sed -n 's/.*"sha": *"\([0-9a-f]\{40\}\)".*/\1/p' | head -n1)
+          [ -n "$main" ] || { echo "FAIL  cannot read main of the ci repo"; exit 1; }
+          expect "DISPATCH_TOKEN cannot create a branch"   "$(api "$DISPATCH_TOKEN" POST repos/termenbox/termenbox-ci/git/refs "{\"ref\":\"refs/heads/token-check-probe\",\"sha\":\"$main\"}")" '403|404|422'
+          expect "DISPATCH_TOKEN cannot push main"         "$(api "$DISPATCH_TOKEN" PATCH repos/termenbox/termenbox-ci/git/refs/heads/main "{\"sha\":\"$main\",\"force\":false}")" '403|404|422'
+
+          expect "LOG_TOKEN cannot read the source contents" "$(api "$LOG_TOKEN" GET repos/$SRC/contents/package.json)" '403|404'
 
           if [ -n "$CF_ACCOUNT" ]; then ep="accounts/$CF_ACCOUNT/tokens/verify"; else ep="user/tokens/verify"; fi
           v=$(curl -s -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/$ep")
