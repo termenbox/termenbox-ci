@@ -63,7 +63,7 @@ jobs:
           token: ${{ secrets.SOURCE_TOKEN }}
           depth: 0
           base: ${{ github.event.client_payload.base }}
-          remote: true
+          fetch: master
           branch: master
       - id: g
         env:
@@ -84,7 +84,6 @@ jobs:
           core="$(jq -r .core <<<"$plan")"
           if [ "$publish" = true ]; then
             [ "$core" = "$crate" ] || { echo "tag $tag has core $core but packages/server/Cargo.toml says $crate"; exit 1; }
-            git fetch -q origin master
             git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/master || { echo "$tag is not on master (decision 0129): a beta comes only from master"; exit 1; }
           fi
           {
@@ -103,7 +102,6 @@ jobs:
           # Rule 1: the gate runs from master's copy of its script and the scripts it runs, not from the release
           # commit's checkout. A script not yet on master stops the release.
           set -eu
-          git fetch -q origin master
           gate="$RUNNER_TEMP/gate"
           mkdir -p "$gate"
           for f in check-security-review.mjs check-security-surface.mjs check-security-counts.mjs; do

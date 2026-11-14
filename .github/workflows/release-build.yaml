@@ -70,7 +70,6 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
 
       # A dry run may use any version (the default is 0.0.0); the gates of the wrappers hold a published one to the tag.
       - name: The version has the Cargo.toml version as its core
@@ -213,7 +212,6 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
@@ -280,7 +278,6 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -438,7 +435,6 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -634,7 +630,6 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -802,7 +797,6 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:

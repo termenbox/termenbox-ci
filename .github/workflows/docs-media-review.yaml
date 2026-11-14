@@ -74,7 +74,7 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
+          fetch: develop
         if: steps.gate.outputs.ok == 'true'
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
@@ -132,8 +132,7 @@ jobs:
           branch="docs/media-$RUN_ID"
           git config user.name "docs-media[bot]"
           git config user.email "docs-media-bot@users.noreply.github.com"
-          git fetch --depth 1 origin develop
-          git switch -c "$branch" FETCH_HEAD
+          git switch -c "$branch" refs/remotes/origin/develop
           while read -r c p h; do
             node scripts/docs-media-review-cli.mjs approve "$RUNNER_TEMP/render" docs/media "$c" "$p" "$h"
           done < "$RUNNER_TEMP/approve.txt"

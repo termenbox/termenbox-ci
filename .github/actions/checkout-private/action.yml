@@ -7,7 +7,7 @@ inputs:
   depth: { description: "Fetch depth; 0 fetches the whole history", default: "1" }
   base: { description: Extra commit to fetch (the base of a pull request), default: "" }
   branch: { description: "Branch whose head is taken when no sha is given", default: develop }
-  remote: { description: "Keep an origin remote and a repo-local auth header for steps that fetch more (git fetch origin master); the header sits in .git/config", default: "false" }
+  fetch: { description: "Branches to fetch into refs/remotes/origin/<branch> during this step (space separated), for jobs that compare the commit with master or develop; no credential is left behind, so a later step cannot fetch", default: "" }
 runs:
   using: composite
   steps:
@@ -18,11 +18,13 @@ runs:
         BASE: ${{ inputs.base }}
         DEST: ${{ inputs.path }}
         DEPTH: ${{ inputs.depth }}
-        REMOTE: ${{ inputs.remote }}
+        FETCH: ${{ inputs.fetch }}
         BRANCH: ${{ inputs.branch }}
       run: |
         set +x
         for v in "$SHA" "$BASE"; do case "$v" in *[!0-9a-f]*) echo "bad sha"; exit 1;; esac; done
+        refspecs=""
+        for b in $FETCH; do case "$b" in ''|*[!A-Za-z0-9._-]*) echo "bad branch"; exit 1;; esac; refspecs="$refspecs +refs/heads/$b:refs/remotes/origin/$b"; done
         url="https://x-access-token:${TOKEN}@github.com/termenbox/termenbox-source.git"
         # a scheduled or manual run has no commit in its payload: take the head of the branch (develop by default)
         if [ -z "$SHA" ]; then SHA=$(git ls-remote "$url" "refs/heads/$BRANCH" 2>/dev/null | cut -f1); fi
@@ -33,11 +35,8 @@ runs:
         {
           git init -q "$DEST" && cd "$DEST"
           if [ "$DEPTH" = 0 ]; then d=""; else d="--depth=$DEPTH"; fi
-          git -c credential.helper= fetch -q --no-tags $d "$url" "$SHA" ${BASE:+"$BASE"}
+          git -c credential.helper= fetch -q --no-tags $d "$url" "$SHA" ${BASE:+"$BASE"} $refspecs
           git checkout -q FETCH_HEAD
-          if [ "$REMOTE" = true ]; then
-            git remote add origin https://github.com/termenbox/termenbox-source.git
-            git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
-          fi
+          git remote add origin https://github.com/termenbox/termenbox-source.git
         } >/dev/null 2>"$err" || { echo "checkout failed:"; sed "s#${TOKEN}#***#g" "$err" | head -3; exit 1; }
         echo "checked out $SHA"

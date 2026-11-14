@@ -85,7 +85,6 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
 
       - uses: ./.github/actions/build-client
         with:
@@ -140,7 +139,6 @@ jobs:
         with:
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
 
       - name: Fetch the built client
         if: inputs.tag == ''

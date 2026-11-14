@@ -88,7 +88,7 @@ jobs:
           token: ${{ secrets.SOURCE_TOKEN }}
           depth: 0
           base: ${{ github.event.client_payload.base }}
-          remote: true
+          fetch: master
       - id: p
         env:
           CALL_TAGS: ${{ inputs.tags }}
@@ -140,7 +140,6 @@ jobs:
         run: |
           # Rule 1: the gate runs from master's copy of its script and the scripts it runs, not from the commit's checkout.
           set -eu
-          git fetch -q origin master
           gate="$RUNNER_TEMP/gate"
           mkdir -p "$gate"
           for f in check-security-review.mjs check-security-surface.mjs check-security-counts.mjs; do
@@ -189,7 +188,6 @@ jobs:
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
-          remote: true
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Log in to Container Registry
         if: env.PUSH == 'true'

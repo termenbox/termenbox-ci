@@ -67,7 +67,7 @@ jobs:
           token: ${{ secrets.SOURCE_TOKEN }}
           depth: 0
           base: ${{ github.event.client_payload.base }}
-          remote: true
+          fetch: master
           branch: master
       - id: g
         env:
@@ -91,7 +91,6 @@ jobs:
           version="$(jq -r .version <<<"$plan")"
           if [ "$publish" = true ]; then
             [ "$version" = "$crate" ] || { echo "tag $tag does not match packages/server/Cargo.toml version $crate"; exit 1; }
-            git fetch -q origin master
             git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/master || { echo "$tag is not on master (decision 0129): a stable release comes only from master"; exit 1; }
             # What is released is what CI built and tested (the nightly asks the same of its commit).
             green="$(GH_TOKEN="$STATUS_TOKEN" gh api "repos/termenbox/termenbox-source/commits/$(git rev-parse HEAD)/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
@@ -112,7 +111,6 @@ jobs:
           # Rule 1: the gate runs from master's copy of its script and the scripts it runs, not from the release
           # commit's checkout. A script not yet on master stops the release.
           set -eu
-          git fetch -q origin master
           gate="$RUNNER_TEMP/gate"
           mkdir -p "$gate"
           for f in check-security-review.mjs check-security-surface.mjs check-security-counts.mjs; do
