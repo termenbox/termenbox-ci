@@ -35,10 +35,11 @@ defaults:
   run:
     shell: quiet {0}
 
-# A new push to a pull request cancels the image build of the stale one. Tag, nightly and manual runs are never
+# A new push to a pull request cancels the image build of the stale one of the same pull request (the ref of a dispatched
+# run is always main, so the group is the pull request number, not the ref). Tag, nightly and manual runs are never
 # cancelled (their group is the run itself).
 concurrency:
-  group: docker-${{ (github.event.client_payload.event || github.event_name) == 'pull_request' && github.ref || github.run_id }}
+  group: docker-${{ (github.event.client_payload.event || github.event_name) == 'pull_request' && format('pr-{0}', github.event.client_payload.pr) || github.run_id }}
   cancel-in-progress: ${{ (github.event.client_payload.event || github.event_name) == 'pull_request' }}
 
 env:

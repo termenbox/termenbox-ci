@@ -23,7 +23,7 @@ defaults:
 
 # A new push to a PR cancels the stale run; master/develop runs are left to finish.
 concurrency:
-  group: go-getter-${{ github.event.client_payload.event }}-${{ github.ref }}
+  group: go-getter-${{ github.event.client_payload.event }}-${{ github.event.client_payload.pr || github.event.client_payload.sha || github.run_id }}
   cancel-in-progress: ${{ github.event.client_payload.event == 'pull_request' }}
 
 jobs:
