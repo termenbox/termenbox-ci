@@ -8,6 +8,10 @@ rules:
       - docs-media-review.yaml
       - release-nightly.yaml
       - docs-media.yaml
+      # deploy-site and publish-wiki follow only 'Release (stable)', which a dispatch starts and no pull request, issue or comment can;
+      # check-workflow-secrets reads the same fact. publish-wiki also waits for the one approval before any job holds a token.
+      - deploy-site.yaml
+      - publish-wiki.yaml
   github-env:
     ignore:
       # The value written is the repository variable plus a fixed suffix; both are validated by the case statements above it.

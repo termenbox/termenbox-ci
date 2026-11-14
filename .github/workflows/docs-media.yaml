@@ -39,7 +39,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 defaults:
   run:

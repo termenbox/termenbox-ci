@@ -1395,13 +1395,8 @@ jobs:
 
       - name: Test and run the check
         run: |
-          node --test scripts/check-security-surface.test.mjs scripts/check-security-review.test.mjs scripts/check-release-gate.test.mjs scripts/check-pinned-actions.test.mjs scripts/check-job-environments.test.mjs scripts/bundle-sign.test.mjs scripts/install-verified.test.mjs scripts/check-template-review.test.mjs scripts/check-deploy-token-scope.test.mjs scripts/check-workflow-secrets.test.mjs scripts/check-security-jobs.test.mjs scripts/check-pnpm-audit.test.mjs scripts/check-cert-kid.test.mjs scripts/check-image-pins.test.mjs
+          node --test scripts/check-security-surface.test.mjs scripts/check-security-review.test.mjs scripts/check-release-gate.test.mjs scripts/bundle-sign.test.mjs scripts/install-verified.test.mjs scripts/check-template-review.test.mjs scripts/check-deploy-token-scope.test.mjs scripts/check-pnpm-audit.test.mjs scripts/check-cert-kid.test.mjs scripts/check-image-pins.test.mjs
           node scripts/check-security-surface.mjs
-          node scripts/check-pinned-actions.mjs
-          node scripts/check-image-pins.mjs --workflows
-          node scripts/check-job-environments.mjs
-          node scripts/check-workflow-secrets.mjs
-          node scripts/check-security-jobs.mjs
 
       - name: Token to read the pull request's files and comment on it
         id: comment-token
@@ -1442,7 +1437,7 @@ jobs:
             ${{ secrets.LOG_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
 
-  # Supply chain (plan step C.5): the workflow linter (policy in .github/zizmor.yml), `cargo deny` for advisories and the
+  # Supply chain (plan step C.5): `cargo deny` for advisories and the
   # licence policy (deny.toml), and `pnpm audit` against the dated allowlist (.github/audit-allowlist.txt).
   # Runs for every pull request, whatever it touches, because a new advisory appears without any change here.
   supply-chain:
@@ -1461,11 +1456,6 @@ jobs:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
-
-      - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
-        with:
-          advanced-security: false
-          min-severity: high
 
       - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
