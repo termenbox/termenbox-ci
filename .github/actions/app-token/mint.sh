@@ -21,9 +21,13 @@ call() { # call <method> <url> [json body]; prints the body, fails on an HTTP er
     ${3:+-H "Content-Type: application/json" --data "$3"} "$2" 2>/dev/null) || { echo "github refused $1 ${2#"$api"} (check the app's installation and permissions)"; exit 1; }
   printf '%s' "$out"
 }
-inst=$(call GET "$api/repos/$REPO/installation" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
-req=$(python3 -c 'import sys,json;print(json.dumps({"repositories":[sys.argv[1].split("/")[1]],"permissions":json.loads(sys.argv[2])}))' "$REPO" "$PERMISSIONS")
-token=$(call POST "$api/app/installations/$inst/access_tokens" "$req" | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+# No python or jq here: the browser jobs run in images that have neither a usable python nor jq, only bash, openssl, curl and sed.
+case "$REPO" in *[!A-Za-z0-9./_-]*) echo "bad repository"; exit 1 ;; esac
+case "$PERMISSIONS" in *[!a-z_{}\":,\ ]*) echo "bad permissions"; exit 1 ;; esac
+inst=$(call GET "$api/repos/$REPO/installation" | grep -o '"id": *[0-9][0-9]*' | head -n1 | grep -o '[0-9][0-9]*$')
+[ -n "$inst" ] || { echo "no installation of the app on $REPO"; exit 1; }
+req=$(printf '{"repositories":["%s"],"permissions":%s}' "${REPO#*/}" "$PERMISSIONS")
+token=$(call POST "$api/app/installations/$inst/access_tokens" "$req" | grep -o '"token": *"[^"]*"' | head -n1 | sed 's/^"token": *"//; s/"$//')
 [ -n "$token" ] || { echo "no token returned"; exit 1; }
 # MINT_STDOUT=1 (another action calling this script) prints the bare token and nothing else, for the caller to hold in a variable.
 if [ "${MINT_STDOUT:-}" = 1 ]; then printf '%s' "$token"; exit 0; fi
