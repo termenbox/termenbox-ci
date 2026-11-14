@@ -418,7 +418,7 @@ jobs:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           token: ${{ secrets.SOURCE_TOKEN }}
 
-      # The server binary depends on the Rust sources, the lockfile and the relay files it embeds, not on the client: a pull request
+      # The server binary depends on the Rust sources, the lockfile and the relay files and the tmux build script it embeds, not on the client: a pull request
       # that leaves them as they are on develop takes the binary a push to develop built, and starts the browser jobs a minute
       # sooner. The key is the content of those inputs; a push that builds saves it, a pull request only restores.
       - name: Restore the server binary of these sources
@@ -426,7 +426,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/ci/termenbox-server
-          key: server-bin-ci-${{ hashFiles('packages/server/**', 'packages/core/**', 'packages/agent/**', 'packages/bridge-contract/**', 'Cargo.toml', 'Cargo.lock', 'infra/owner-relay/dist/**') }}
+          key: server-bin-ci-${{ hashFiles('packages/server/**', 'packages/core/**', 'packages/agent/**', 'packages/bridge-contract/**', 'Cargo.toml', 'Cargo.lock', 'infra/owner-relay/dist/**', '.github/scripts/build-tmux.sh') }}
 
       - name: Install Rust toolchain
         if: steps.bin.outputs.cache-hit != 'true'
