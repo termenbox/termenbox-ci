@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 // node sweep/check-ci-minutes.mjs : the pull-request runs of ci.yaml do not grow back. Reads the newest successful pull-request
 // runs that built code (a docs-only run skips every job) and fails when, as a median over the newest five,
-//   the job-minutes are above SWEEP_CI_MINUTES (default 90),
-//   the wall time is above SWEEP_CI_WALL_MIN minutes (default 12),
+//   the job-minutes are above SWEEP_CI_MINUTES (default 60),
+//   the wall time is above SWEEP_CI_WALL_MIN minutes (default 7),
 //   or the longest wait of a job for a runner (its `started_at` minus its `created_at`, the time it was ready) is above
-//   SWEEP_CI_QUEUE_SECS seconds (default 240). A job that waits for `needs` is not queued.
+//   SWEEP_CI_QUEUE_SECS seconds (default 15). A job that waits for `needs` is not queued.
 // The defaults sit above what pull requests cost when they were set, so that a regression fails and normal runs do not: they are
 // limits, not targets. Tighten them with the monthly reading of the pipeline plan. It prints nothing; the exit status is the verdict.
 //   SWEEP_GH_REPO  the ci repo (owner/name)
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export const LIMITS = { minutes: 90, wallMin: 12, queueSecs: 240 };
+export const LIMITS = { minutes: 60, wallMin: 7, queueSecs: 15 };
 
 export const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);

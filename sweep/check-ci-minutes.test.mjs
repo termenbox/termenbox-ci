@@ -12,7 +12,7 @@ const T0 = Date.parse('2026-11-13T10:00:00Z');
 const iso = (secs) => new Date(T0 + secs * 1000).toISOString();
 // A run whose jobs become ready at 5 s and start `wait` s after that, and last `mins` minutes each; a job that waited
 // for `needs` first (ready at 200 s) is not queued.
-const run = ({ jobs = 10, mins = 5, wait = 60, wall = 600, code = true } = {}) => ({
+const run = ({ jobs = 10, mins = 5, wait = 10, wall = 360, code = true } = {}) => ({
   createdAt: iso(0),
   updatedAt: iso(wall),
   jobs: [
@@ -31,9 +31,9 @@ test('a run reads as job-minutes, wall minutes and the longest runner wait; a ru
 
 test('the median passes inside every limit and fails over each one, and no reading fails', () => {
   const five = (o) => Array.from({ length: 5 }, () => reading(run(o)));
-  assert.equal(verdict(five({ jobs: 10, mins: 5, wait: 60, wall: 600 })), true);
+  assert.equal(verdict(five({ jobs: 10, mins: 5, wait: 10, wall: 360 })), true);
   assert.equal(verdict(five({ jobs: 20, mins: 5 })), false, 'job-minutes: 100');
-  assert.equal(verdict(five({ wall: 780 })), false, 'wall: 13 min');
+  assert.equal(verdict(five({ wall: 480 })), false, 'wall: 8 min');
   assert.equal(verdict(five({ wait: 300 })), false, 'queue: 300 s');
   assert.equal(verdict([]), false);
   assert.equal(median([1, 9, 2]), 2);
