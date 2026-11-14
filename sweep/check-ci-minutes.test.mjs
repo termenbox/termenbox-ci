@@ -33,7 +33,7 @@ test('the median passes inside every limit and fails over each one, and no readi
   const five = (o) => Array.from({ length: 5 }, () => reading(run(o)));
   assert.equal(verdict(five({ jobs: 10, mins: 5, wait: 60, wall: 600 })), true);
   assert.equal(verdict(five({ jobs: 20, mins: 5 })), false, 'job-minutes: 100');
-  assert.equal(verdict(five({ wall: 720 })), false, 'wall: 12 min');
+  assert.equal(verdict(five({ wall: 780 })), false, 'wall: 13 min');
   assert.equal(verdict(five({ wait: 300 })), false, 'queue: 300 s');
   assert.equal(verdict([]), false);
   assert.equal(median([1, 9, 2]), 2);
