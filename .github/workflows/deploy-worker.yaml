@@ -39,12 +39,13 @@ jobs:
         working-directory: worker
         env:
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
-          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
           DISPATCHER_APP_ID: ${{ secrets.DISPATCHER_APP_ID }}
           DISPATCHER_APP_KEY: ${{ secrets.DISPATCHER_APP_KEY }}
         run: |
           printf '%s' "$WEBHOOK_SECRET" | npx --yes wrangler@3.114.0 secret put WEBHOOK_SECRET >/dev/null 2>&1 || { echo "secret WEBHOOK_SECRET failed"; exit 1; }
-          printf '%s' "$DISPATCH_TOKEN" | npx --yes wrangler@3.114.0 secret put DISPATCH_TOKEN >/dev/null 2>&1 || { echo "secret DISPATCH_TOKEN failed"; exit 1; }
+          # The personal dispatch token of before the apps: gone from the Worker (a missing secret is not an error).
+          printf 'y
+' | npx --yes wrangler@3.114.0 secret delete DISPATCH_TOKEN >/dev/null 2>&1 || true
           # The dispatcher app's key as PKCS#8 (GitHub gives PKCS#1; the Worker's WebCrypto reads only PKCS#8). Through stdin only.
           printf '%s' "$DISPATCHER_APP_ID" | npx --yes wrangler@3.114.0 secret put DISPATCHER_APP_ID >/dev/null 2>&1 || { echo "secret DISPATCHER_APP_ID failed"; exit 1; }
           printf '%s\n' "$DISPATCHER_APP_KEY" | openssl pkcs8 -topk8 -nocrypt 2>/dev/null | npx --yes wrangler@3.114.0 secret put DISPATCHER_APP_KEY >/dev/null 2>&1 || { echo "secret DISPATCHER_APP_KEY failed"; exit 1; }

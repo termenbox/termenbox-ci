@@ -184,8 +184,6 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.REPORTER_APP_KEY }}
 
   # Every channel's release workflow calls docker-build.yaml as its `Image` job beside this workflow, so the image may
@@ -248,8 +246,6 @@ jobs:
             ${{ secrets.GHCR_TOKEN }}
             ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.REPORTER_APP_KEY }}
 
   # The manifest is written, signed, checked, published and deployed by five jobs so that no job runs code it does not
@@ -333,8 +329,6 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.REPORTER_APP_KEY }}
 
   sign:
@@ -420,7 +414,6 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
             ${{ secrets.RELEASE_SIGNING_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
 
@@ -528,8 +521,6 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.REPORTER_APP_KEY }}
 
   sign-sums:
@@ -605,7 +596,6 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
             ${{ secrets.RELEASE_SIGNING_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
 
@@ -724,11 +714,9 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
             ${{ secrets.MIRROR_TOKEN }}
             ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
             ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.REPORTER_APP_KEY }}
 
   # The client is built in a job that holds no deploy credential: it reads the public client id and the source token, and
@@ -784,8 +772,6 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
             ${{ secrets.REPORTER_APP_KEY }}
 
@@ -856,9 +842,7 @@ jobs:
             ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             ${{ secrets.CLOUDFLARE_API_TOKEN }}
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.LOG_TOKEN }}
             ${{ secrets.MIRROR_TOKEN }}
-            ${{ secrets.SOURCE_TOKEN }}
             ${{ secrets.TERMENBOX_CERT_SIGNING_KEY }}
             ${{ secrets.TERMENBOX_DIRECTORY_SALT }}
             ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}

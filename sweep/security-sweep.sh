@@ -15,7 +15,7 @@
 #   SWEEP_FUZZ     prefix for the bounded fuzz run, default `sh scripts/dev.sh --fuzz`
 #   SWEEP_FUZZ_SECS  seconds per fuzz target, default 60
 #   SWEEP_DL_HOST  download host, default https://dl.termenbox.dev
-#   SWEEP_TOKENS   names of the environment variables that hold tokens to check for expiry, default `SOURCE_TOKEN LOG_TOKEN STATUS_TOKEN`
+#   SWEEP_TOKENS   names of the environment variables that hold personal tokens to check for expiry, default none (the apps mint tokens of one hour)
 #   SWEEP_GH_REPO  the ci repo (owner/name): the token-scope check asks it for a recent successful per-Environment run
 #   SWEEP_CI_BYTES  live artifact bytes the ci-storage check allows, default 2000000000; SWEEP_CACHE_BYTES the cache bytes, default 7000000000
 #   SWEEP_MANIFEST_WARN_DAYS  age in days from which a channel's signed manifest fails the manifest-age check, default 60
@@ -31,7 +31,7 @@ RUST=${SWEEP_RUST:-sh scripts/dev.sh}
 FUZZ=${SWEEP_FUZZ:-sh scripts/dev.sh --fuzz}
 FUZZ_SECS=${SWEEP_FUZZ_SECS:-60}
 export SWEEP_DL_HOST="${SWEEP_DL_HOST:-https://dl.termenbox.dev}"
-export SWEEP_TOKENS="${SWEEP_TOKENS:-SOURCE_TOKEN LOG_TOKEN STATUS_TOKEN}"
+export SWEEP_TOKENS="${SWEEP_TOKENS:-}"
 export SWEEP_STATE="${SWEEP_STATE:-}"
 NIGHTLY=nightly-2026-10-15
 
