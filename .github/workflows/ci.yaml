@@ -30,7 +30,7 @@ env:
 # This file is canonical for the build setup: release-build.yaml follows it (same cargo env, same cache keys, the
 # bundled tmux restored from what the tmux job saved) and never writes the caches itself.
 concurrency:
-  group: ci-${{ github.event.client_payload.event }}-${{ github.event.client_payload.event == 'push' && (github.event.client_payload.sha || inputs.sha) || format('pr-{0}', github.event.client_payload.pr) }}
+  group: ci-${{ github.event.client_payload.event || 'manual' }}-${{ github.event.client_payload.event == 'pull_request' && format('pr-{0}', github.event.client_payload.pr) || (github.event.client_payload.sha || inputs.sha) }}
   cancel-in-progress: ${{ github.event.client_payload.event == 'pull_request' }}
 
 # Caches (Swatinem/rust-cache) are written only by pushes to master/develop (save-if). A PR restores from its base
@@ -40,9 +40,10 @@ concurrency:
 #   changes                                       (what the pull request touches: docs only skips every job, server-only skips `browsers`)
 #   client                                        (typecheck, build, unit tests, bundle gate)
 #   rust-lint | rust-build | rust-test            (three cargo jobs in parallel instead of one long chain)
-#   browsers                                      (scripted servers, no binary: starts immediately)
-#   e2e, browsers-real        needs rust-build    (real server binary)
-#   static (x86_64, aarch64) -> e2e-static, installer (+ tmux)
+#   browsers                                      (scripted servers, no binary: builds its own pages and starts at once)
+#   pages                                         (the client and probe pages, built once beside rust-build)
+#   e2e, browsers-real        needs rust-build, pages, tmux (real server binary, the bundled tmux)
+#   static (x86_64, aarch64) -> e2e-static (+ pages, tmux), installer (+ tmux)
 #   ci                                            (single result for branch protection)
 
 jobs:
@@ -528,17 +529,13 @@ jobs:
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
 
-  # Real Chrome against the real server binary: login and claim over WebRTC, typing, reconnect with screen replay,
-  # plus the resource gates (server RSS with 10 sessions, CPU while output streams). Only GitHub is a stand-in.
-  #
-  # The script list is spread over the shards by suite.mjs (heaviest first, weights in that file): to use more machines,
-  # add a number to `shard`.
-  # The client and the probe pages the browser jobs drive, built once. Every browser job used to run `pnpm install` and
-  # `e2e:build` itself (about a minute each, 17 times a pull request); they now download this.
+  # The client and the probe pages the jobs that wait for the server binary drive, built once beside `rust-build`. Each of
+  # them used to run `pnpm install` and `e2e:build` itself (about a minute); they now download this. `browsers` has no
+  # predecessor and is on the critical path, so it builds its own pages and does not wait for this job.
   pages:
     name: Client pages for the browser jobs
     needs: changes
-    if: needs.changes.outputs.scripted == 'true' || needs.changes.outputs.smoke != 'true' || needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false'
+    if: needs.changes.outputs.code == 'true' && (needs.changes.outputs.smoke != 'true' || needs.changes.outputs.server != 'false' || needs.changes.outputs.installer != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -589,6 +586,11 @@ jobs:
             ${{ secrets.LOG_TOKEN }}
             ${{ secrets.SOURCE_TOKEN }}
 
+  # Real Chrome against the real server binary: login and claim over WebRTC, typing, reconnect with screen replay,
+  # plus the resource gates (server RSS with 10 sessions, CPU while output streams). Only GitHub is a stand-in.
+  #
+  # The script list is spread over the shards by suite.mjs (heaviest first, weights in that file): to use more machines,
+  # add a number to `shard`.
   e2e:
     name: Browser end-to-end and resource gates (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: [changes, rust-build, pages, tmux]
@@ -690,7 +692,7 @@ jobs:
   # `CI failures` issue when a new build has a new digest, and the next change here bumps both lines.
   browsers:
     name: Browser matrix (${{ matrix.engine }}, ${{ matrix.runs }})
-    needs: [changes, pages]
+    needs: changes
     if: needs.changes.outputs.scripted == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -721,16 +723,9 @@ jobs:
       - if: github.event.client_payload.event != 'push'
         uses: ./.github/actions/pnpm-restore
 
-      # Only the client package: the scripts import playwright-core; the pages come from the `pages` job.
-      - run: pnpm install --frozen-lockfile --filter termenbox-client --ignore-scripts
+      - run: pnpm install --frozen-lockfile
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: client-pages
-          path: packages/client
-
-      - name: Check the built pages
-        run: test -f packages/client/dist/index.html && test -d packages/client/e2e/dist
+      - run: pnpm --filter termenbox-client run e2e:build
 
       - name: Run the scripts (suite:size:ratio[:shard i/n] list from the matrix)
         shell: bash
@@ -1536,6 +1531,7 @@ jobs:
           for g in rust-lint rust-ci rust-test static-x86_64 static-aarch64; do
             .github/scripts/prune-caches.sh "v0-rust-$g-" 1
           done
+          .github/scripts/prune-caches.sh server-bin-ci- 2
           for g in static-x86_64 static-aarch64 tmux-x86_64 tmux-aarch64; do
             .github/scripts/prune-caches.sh "apt-$g-" 1
           done
@@ -1586,7 +1582,7 @@ jobs:
                   or (name in ("rust-build", "e2e", "browsers-real") and not server and not client)
                   or (name in ("tmux", "installer", "container-installer", "e2e-static") and not server and not installer)
               )
-              allowed = result == "skipped" and (name == "pages" or (out.get("code") == "false" and not (name == "client" and out.get("media") != "false")) or (name == "browsers" and out.get("scripted") == "false") or (out.get("smoke") == "true" and name in smoke_skips) or (out.get("code") == "true" and scoped))
+              allowed = result == "skipped" and ((out.get("code") == "false" and not (name == "client" and out.get("media") != "false")) or (name == "browsers" and out.get("scripted") == "false") or (out.get("smoke") == "true" and name in smoke_skips) or (out.get("code") == "true" and scoped))
               if not allowed:
                   bad.append(name + ": " + result)
           print("code=%s scripted=%s media=%s server=%s client=%s installer=%s smoke=%s" % (out.get("code"), out.get("scripted"), out.get("media"), out.get("server"), out.get("client"), out.get("installer"), out.get("smoke")))

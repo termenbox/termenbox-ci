@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // node sweep/check-ci-minutes.mjs : the pull-request runs of ci.yaml do not grow back. Reads the newest successful pull-request
 // runs that built code (a docs-only run skips every job) and fails when, as a median over the newest five,
-//   the job-minutes are above SWEEP_CI_MINUTES (default 90; the plan's target is 75),
-//   the wall time is above SWEEP_CI_WALL_MIN minutes (default 12; the plan's target is 6),
+//   the job-minutes are above SWEEP_CI_MINUTES (default 90),
+//   the wall time is above SWEEP_CI_WALL_MIN minutes (default 12),
 //   or the longest wait of a job for a runner (its `started_at` minus its `created_at`, the time it was ready) is above
-//   SWEEP_CI_QUEUE_SECS seconds (default 240; the plan's target is 60). A job that waits for `needs` is not queued.
-// The defaults sit just above the median of the newest five on 2026-11-14 (wall 11.0 min, 72 job-minutes, 144 s) so that a regression fails; tighten them with the monthly reading
-// (docs/plans/ci-pipeline.md in the source repo, step 5.2). It prints nothing; the exit status is the verdict.
+//   SWEEP_CI_QUEUE_SECS seconds (default 240). A job that waits for `needs` is not queued.
+// The defaults sit above what pull requests cost when they were set, so that a regression fails and normal runs do not: they are
+// limits, not targets. Tighten them with the monthly reading of the pipeline plan. It prints nothing; the exit status is the verdict.
 //   SWEEP_GH_REPO  the ci repo (owner/name)
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -46,9 +46,9 @@ export function main(env = process.env) {
   const repo = env.SWEEP_GH_REPO;
   if (!repo) return 1;
   const limits = {
-    minutes: Number(env.SWEEP_CI_MINUTES ?? LIMITS.minutes),
-    wallMin: Number(env.SWEEP_CI_WALL_MIN ?? LIMITS.wallMin),
-    queueSecs: Number(env.SWEEP_CI_QUEUE_SECS ?? LIMITS.queueSecs),
+    minutes: Number(env.SWEEP_CI_MINUTES || LIMITS.minutes),
+    wallMin: Number(env.SWEEP_CI_WALL_MIN || LIMITS.wallMin),
+    queueSecs: Number(env.SWEEP_CI_QUEUE_SECS || LIMITS.queueSecs),
   };
   try {
     const list = gh('run', 'list', '-R', repo, '--workflow', 'ci.yaml', '--status', 'success', '-L', '30', '--json', 'databaseId,displayTitle,createdAt,updatedAt');

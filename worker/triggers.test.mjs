@@ -26,6 +26,7 @@ const files = (...f) => [{ added: [], modified: f, removed: [] }];
 const rows = [
   ["push to develop", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: files("README.md") }, PUSHED],
   ["push to develop that changes the CI image", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: files("docker/Dockerfile.ci") }, [...PUSHED, "ci-image"]],
+  ["push to develop with a commit that lists no file (a merge)", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: [{ added: [], modified: [], removed: [] }] }, [...PUSHED, "ci-image"]],
   ["push to develop with no list of files", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B }, [...PUSHED, "ci-image"]],
   ["push to develop with a full list of commits", "push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: Array.from({ length: 20 }, () => files("README.md")[0]) }, [...PUSHED, "ci-image"]],
   ["push to master", "push", { repository: repo, ref: "refs/heads/master", after: A, before: B, commits: files("README.md") }, [...PUSHED, "base-image", "deploy-site"]],

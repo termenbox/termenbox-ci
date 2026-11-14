@@ -169,11 +169,16 @@ jobs:
         run: |
           set -eu
           printf '%s' "$SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "no release commit"; exit 1; }
-          runs() { gh run list --workflow ci.yaml --event workflow_dispatch -L 40 --json databaseId,displayTitle,createdAt,status,conclusion \
+          # Only a run of main counts (the sha input also tests a change to the workflow from a ci-repo branch).
+          runs() { gh run list --workflow ci.yaml --event workflow_dispatch --branch main -L 60 --json databaseId,displayTitle,createdAt,status,conclusion \
             --jq "[.[] | select(.displayTitle | endswith(\" · $SHA\"))]"; }
           if [ "$(runs | jq '[.[] | select(.conclusion == "success")] | length')" -gt 0 ]; then
             echo "a full run of $SHA already passed"; exit 0
           fi
+          # A red full run of this commit stops the release: the fix is a new commit, and this job does not start a second run
+          # of the same commit that could pass by chance.
+          red=$(runs | jq -r '[.[] | select(.conclusion == "failure" or .conclusion == "timed_out")][0].databaseId // empty')
+          [ -z "$red" ] || { echo "the full run of $SHA is red (run $red): a stable release needs a new commit with a green full run"; exit 1; }
           # A full run of this commit that is still going is waited for, not started twice.
           id=$(runs | jq -r '[.[] | select(.status != "completed")][0].databaseId // empty')
           if [ -z "$id" ]; then
@@ -186,7 +191,8 @@ jobs:
             done
           fi
           [ -n "$id" ] || { echo "the full run did not start"; exit 1; }
-          gh run watch "$id" --exit-status >/dev/null || { echo "the full run of $SHA is red (run $id): a stable release needs it green"; exit 1; }
+          # A slow refresh: a watch at the default 3 s costs about a thousand API calls an hour, the limit of this token.
+          gh run watch "$id" -i 30 --exit-status >/dev/null || { echo "the full run of $SHA is red or was cancelled (run $id): a stable release needs a new commit with a green full run"; exit 1; }
 
   # GitHub does not start a workflow for a tag its own token created, and a second run would need its own approvals, so
   # the image is built by calling the workflow in this run. The release waits for the image tag and signs its digests.

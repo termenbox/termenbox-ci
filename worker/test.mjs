@@ -44,6 +44,7 @@ const edit = (...f) => [{ added: [], modified: f, removed: [] }];
 assert.deepEqual(T("push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: edit("README.md") }), ["source-pushed"]);
 assert.deepEqual(T("push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: edit("docker/Dockerfile.ci") }), ["source-pushed", "source-image"]);
 assert.deepEqual(T("push", { repository: repo, ref: "refs/heads/develop", after: A, before: B }), ["source-pushed", "source-image"]);
+assert.deepEqual(T("push", { repository: repo, ref: "refs/heads/develop", after: A, before: B, commits: [{ added: [], modified: [], removed: [] }] }), ["source-pushed", "source-image"]);
 assert.deepEqual(T("push", { repository: repo, ref: "refs/heads/master", after: A, before: B, commits: edit("README.md") }), ["source-pushed", "source-master"]);
 assert.deepEqual(T("push", { repository: repo, ref: "refs/tags/v1.2.3", after: A, before: Z }), ["source-tag"]);
 assert.deepEqual(T("pull_request", pr(repo)), ["source-pushed"]);
