@@ -113,8 +113,7 @@ jobs:
             echo 'smoke=false' | tee -a "$GITHUB_OUTPUT"
             # A pull request runs one desktop and one phone size, not every size: Chromium at 1440x900, WebKit (the proxy for
             # iOS Safari 16.4+) at 1440x900 and on the phone, only when the client changed, and the real server on Chromium
-            # and the WebKit phone. The 1024x768 legs, the WebKit desktop real-server leg and Firefox run on the daily run
-            # (DECISION-0250). An empty lookup counts as a client change.
+            # and the WebKit phone. The 1024x768 legs, the WebKit desktop real-server leg and Firefox run on the daily run. An empty lookup counts as a client change.
             printf '%s\n' '[{"engine":"firefox"},{"engine":"chromium","runs":"desktop:1024x768:1"},{"engine":"webkit","runs":"desktop:1024x768:1:1/2"},{"engine":"webkit","runs":"desktop:1024x768:1:2/2"},{"name":"webkit-desktop"}]' > skip.json
             if [ -s paths.txt ] && ! grep -q '^packages/client/' paths.txt; then
               echo '[{"engine":"firefox"},{"engine":"webkit"},{"engine":"chromium","runs":"desktop:1024x768:1"}]' > skip.json
