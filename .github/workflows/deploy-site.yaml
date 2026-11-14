@@ -127,6 +127,13 @@ jobs:
       # looked at on a phone before a release. Production deploys only from master.
       # The branch is chosen in a step of its own: only it holds the source token, and only for one command, so wrangler
       # (third-party code) never runs with it and the checkout keeps no credential in .git/config.
+      - id: rt-master
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
       - name: Choose the Pages branch
         id: branch
         run: |
@@ -142,7 +149,7 @@ jobs:
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
         env:
           PREVIEW: ${{ inputs.preview }}
-          SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+          SOURCE_TOKEN: ${{ steps.rt-master.outputs.token }}
       - name: Deploy to Cloudflare Pages
         if: steps.branch.outputs.skip != 'true'
         run: |

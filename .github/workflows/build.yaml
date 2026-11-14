@@ -19,9 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      - id: rt-src
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
       - name: Check out the source
         env:
-          TOKEN: ${{ secrets.SOURCE_TOKEN }}
+          TOKEN: ${{ steps.rt-src.outputs.token }}
           REF: ${{ github.event.inputs.ref || github.event.client_payload.ref || 'develop' }}
         run: |
           set +x
