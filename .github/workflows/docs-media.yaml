@@ -150,6 +150,8 @@ jobs:
           PACE: ${{ inputs.pace || 'normal' }}
           CAPTION: ${{ inputs.caption || 'on' }}
           VOICE: ${{ inputs.voice || 'on' }}
+          # a video the flicker check fails is kept (as <case>-<profile>.flicker.mp4 with its pointer path) and uploaded below
+          VIDEO_DEBUG: '1'
           TERMENBOX_BIN: ${{ github.workspace }}/target/ci/termenbox-server
         run: |
           flags="--pace $PACE --skip-unsupported"; [ "$CAPTION" = off ] && flags="$flags --no-caption"
@@ -176,6 +178,15 @@ jobs:
       - name: Build the review page
         if: steps.pick.outputs.go == 'true'
         run: node scripts/docs-media-review-page.mjs media
+
+      # A failed render leaves what it kept: the videos that passed and the one the flicker check rejected.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure() && steps.pick.outputs.go == 'true'
+        with:
+          name: docs-media-failed-${{ github.run_id }}
+          path: media
+          retention-days: 3
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: steps.pick.outputs.go == 'true'
