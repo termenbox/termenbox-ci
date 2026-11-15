@@ -158,12 +158,19 @@ jobs:
             node e2e/video/voice-sync.mjs --check
             flags="$flags --voice"
           fi
+          # One video that fails (a bounce frame, a failed assertion) must not keep the others from being rendered and reviewed:
+          # every case runs, the failed ones are named here and in the review issue, and nothing is retried.
+          failed=""
           for c in $CASES; do
             for p in $PROFILES; do
               # shellcheck disable=SC2086
-              node e2e/video/render.mjs --case "$c" --profile "$p" --out "$GITHUB_WORKSPACE/media" $flags
+              if ! node e2e/video/render.mjs --case "$c" --profile "$p" --out "$GITHUB_WORKSPACE/media" $flags; then
+                failed="$failed $c:$p"
+                echo "::error::render failed: $c ($p)"
+              fi
             done
           done
+          printf '%s\n' "${failed# }" > "$RUNNER_TEMP/failed.txt"
           ls -l "$GITHUB_WORKSPACE/media"
 
       - name: Build the review page
@@ -187,6 +194,9 @@ jobs:
         run: |
           mkdir review
           PREVIEW_URL="https://media-$RUN_ID.$PROJECT.pages.dev" node scripts/docs-media-review-cli.mjs issue-body media > review/body.md
+          if [ -s "$RUNNER_TEMP/failed.txt" ]; then
+            printf '\n\n**Not rendered** (each failed its own check; dispatch Docs Media again with these case ids): %s\n' "$(cat "$RUNNER_TEMP/failed.txt")" >> review/body.md
+          fi
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: steps.pick.outputs.go == 'true'
