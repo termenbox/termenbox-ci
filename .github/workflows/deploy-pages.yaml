@@ -141,6 +141,17 @@ jobs:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
+          fetch: master
+
+      # check-deploy-ref.sh runs `git fetch origin master`, and the checkout keeps no credential (so a step that runs third-party
+      # code cannot read the source). Hand it the master the checkout fetched: a local branch of that name and the checkout itself as
+      # `origin`, so the fetch needs nothing and compares the same master. A deploy of a staged bundle fetches a tag the same way;
+      # that path (deploy-pages.yaml with a tag) is not served by this.
+      - name: Give the deploy ref check the master the checkout fetched
+        shell: bash
+        run: |
+          git branch -f master refs/remotes/origin/master
+          git remote set-url origin "$GITHUB_WORKSPACE"
 
       - name: Fetch the built client
         if: inputs.tag == ''
