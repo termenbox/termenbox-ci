@@ -22,6 +22,7 @@
 #                  (the installer and the updater refuse one older than 90, so this leaves 30 days to sign it again)
 #   SWEEP_CI_IMAGE_DAYS  age in days of the CI image ci.yaml pins, once a newer build exists, from which ci-image-age fails, default 60
 #   SWEEP_CI_MINUTES, SWEEP_CI_WALL_MIN, SWEEP_CI_QUEUE_SECS  limits of the ci-minutes check (median of the newest five pull-request runs), default 60, 7, 15
+#   SWEEP_TOKEN_WARN_DAYS  days before expiry from which a token fails the token-expiry check, default 7
 #   SWEEP_STATE    file holding the last seen manifest versions (`channel version` lines), read and rewritten by the manifest check
 set -u
 cd "$(dirname "$0")/.."
@@ -78,9 +79,9 @@ sub_token_scope() {
   [ "${n:-0}" = 1 ]
 }
 
-# Fails when a token has no expiry or expires within 30 days (GitHub reports a fine-grained token's expiry in a header).
+# Fails when a token has no expiry or expires within SWEEP_TOKEN_WARN_DAYS (default 7) (GitHub reports a fine-grained token's expiry in a header).
 sub_token_expiry() {
-  limit=$(( $(date +%s) + 30*86400 ))
+  limit=$(( $(date +%s) + ${SWEEP_TOKEN_WARN_DAYS:-7}*86400 ))
   for name in $SWEEP_TOKENS; do
     eval "tok=\${$name:-}"
     [ -n "$tok" ] || exit 1
