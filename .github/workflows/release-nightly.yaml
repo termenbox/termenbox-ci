@@ -214,9 +214,18 @@ jobs:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
+      - name: Token for the public product repo
+        id: publisher
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.PUBLISHER_APP_ID }}
+          app-key: ${{ secrets.PUBLISHER_APP_KEY }}
+          repository: termenbox/termenbox
+          permissions: '{"contents":"write"}'
+
       - name: Delete nightlies older than 14 days (never the alias target)
         env:
-          GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+          GH_TOKEN: ${{ steps.publisher.outputs.token }}
           GH_REPO: termenbox/termenbox
         run: sh "$TB_RELEASE_TOOLS/prune_nightlies.sh" 14
 
@@ -231,5 +240,5 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.MIRROR_TOKEN }}
+            ${{ secrets.PUBLISHER_APP_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
