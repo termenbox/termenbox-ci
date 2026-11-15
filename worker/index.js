@@ -87,7 +87,10 @@ export function mayChangeImage(p) {
 export function typesFor(cp, p) {
   if (cp.event === "tag") return ["source-tag"];
   if (cp.event === "push") {
-    const types = p.ref === "refs/heads/master" ? ["source-pushed", "source-master"] : ["source-pushed"];
+    // master only moves by a fast-forward of develop (DECISION-0129): its sha already ran every pushed-code workflow as a push to develop,
+    // and a status belongs to the sha, so a master push starts only the workflows that act on master (a second run was pure waste).
+    if (p.ref === "refs/heads/master") return ["source-master"];
+    const types = ["source-pushed"];
     return mayChangeImage(p) ? [...types, "source-image"] : types;
   }
   if (cp.event === "pull_request") return ["source-pushed"];
