@@ -134,6 +134,15 @@ jobs:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           permissions: '{"issues":"write","pull_requests":"read"}'
+      - id: docs-pub
+        name: Token to push the media branch and open its pull request
+        if: steps.ask.outputs.action == 'approve'
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.PUBLISHER_APP_ID }}
+          app-key: ${{ secrets.PUBLISHER_APP_KEY }}
+          repository: termenbox/termenbox-source
+          permissions: '{"contents":"write","pull_requests":"write"}'
       - name: Approve
         id: approve
         if: steps.ask.outputs.action == 'approve'
@@ -143,7 +152,7 @@ jobs:
           GH_TOKEN: ${{ steps.rt-s127.outputs.token }}
           GH_REPO: termenbox/termenbox-source
           ISSUE: ${{ github.event.client_payload.issue }}
-          DOCS_TOKEN: ${{ secrets.DOCS_TOKEN }}
+          DOCS_TOKEN: ${{ steps.docs-pub.outputs.token }}
         run: |
           branch="docs/media-$RUN_ID"
           git config user.name "docs-media[bot]"
@@ -203,7 +212,7 @@ jobs:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
-            ${{ secrets.DOCS_TOKEN }}
+            ${{ secrets.PUBLISHER_APP_KEY }}
             ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
