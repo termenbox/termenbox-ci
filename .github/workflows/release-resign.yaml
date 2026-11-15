@@ -69,7 +69,6 @@ jobs:
       CHANNEL: ${{ matrix.channel }}
       MIN_AGE_DAYS: ${{ inputs.min_age_days || '20' }}
       PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
-      GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
       GH_REPO: termenbox/termenbox
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
@@ -143,8 +142,20 @@ jobs:
           version="$(jq -r .version dist/manifest.json)"
           sh "$TB_RELEASE_TOOLS/publish_r2.sh" --resign dist "$CHANNEL" "$version"
 
+      - name: Token for the public product repo
+        id: publisher
+        if: steps.current.outputs.skip != 'true' && env.PUBLISH == 'true'
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.PUBLISHER_APP_ID }}
+          app-key: ${{ secrets.PUBLISHER_APP_KEY }}
+          repository: termenbox/termenbox
+          permissions: '{"contents":"write"}'
+
       - name: Publish to the mirror
         if: steps.current.outputs.skip != 'true' && env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ steps.publisher.outputs.token }}
         run: sh "$TB_RELEASE_TOOLS/update_alias.sh" --resign "channel-$CHANNEL" dist/manifest.json dist/manifest.json.sig
 
       - if: always()
@@ -158,7 +169,7 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.MIRROR_TOKEN }}
+            ${{ secrets.PUBLISHER_APP_KEY }}
             ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
             ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
             ${{ secrets.RELEASE_SIGNING_KEY }}
