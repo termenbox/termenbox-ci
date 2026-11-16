@@ -136,22 +136,53 @@ jobs:
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
 
+      # A staged bundle is deployed from the commit its release tag points to: read that commit from the source with a
+      # read-only token, so the checkout below is exactly it.
+      - name: Token to read the release tag
+        id: tagtok
+        if: inputs.tag != ''
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          repository: termenbox/termenbox-source
+          permissions: '{"contents":"read"}'
+      - name: Find the commit of the release tag
+        id: tagsha
+        if: inputs.tag != ''
+        shell: bash
+        env:
+          TOKEN: ${{ steps.tagtok.outputs.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set +x
+          case "$TAG" in v[0-9]*) ;; *) echo "not a release tag"; exit 1 ;; esac
+          case "$TAG" in *[!A-Za-z0-9._-]*) echo "not a release tag"; exit 1 ;; esac
+          refs=$(git ls-remote "https://x-access-token:${TOKEN}@github.com/termenbox/termenbox-source.git" "refs/tags/$TAG" "refs/tags/$TAG^{}" 2>/dev/null) || { echo "cannot read the tags of the source"; exit 1; }
+          sha=$(printf '%s\n' "$refs" | awk '/\^\{\}$/ { p = $1 } { if (!p) q = $1 } END { print p ? p : q }')
+          case "$sha" in ""|*[!0-9a-f]*) echo "tag $TAG is not in the source"; exit 1 ;; esac
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
         with:
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ steps.tagsha.outputs.sha || github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           fetch: master
 
       # check-deploy-ref.sh runs `git fetch origin master`, and the checkout keeps no credential (so a step that runs third-party
       # code cannot read the source). Hand it the master the checkout fetched: a local branch of that name and the checkout itself as
-      # `origin`, so the fetch needs nothing and compares the same master. A deploy of a staged bundle fetches a tag the same way;
-      # that path (deploy-pages.yaml with a tag) is not served by this.
-      - name: Give the deploy ref check the master the checkout fetched
+      # `origin`, so the fetch needs nothing and compares the same master. A staged bundle's check fetches its tag from the same
+      # `origin`, so the tag is made here at the commit the step above read from the source for it; the check then still compares the
+      # keys with master's and the tag with the checked-out commit.
+      - name: Give the deploy ref check the master and the tag the checkout fetched
         shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
           git branch -f master refs/remotes/origin/master
           git remote set-url origin "$GITHUB_WORKSPACE"
+          [ -z "$TAG" ] || git tag -f "$TAG" HEAD
 
       - name: Fetch the built client
         if: inputs.tag == ''
