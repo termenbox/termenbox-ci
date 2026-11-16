@@ -807,6 +807,7 @@ jobs:
       PUBLISH: ${{ inputs.publish }}
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
+      staged: ${{ steps.staged.outputs.staged }}
     steps:
       - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
 
@@ -858,6 +859,14 @@ jobs:
           cert-kid: ${{ vars.TERMENBOX_CERT_KID }}
           directory-salt: ${{ secrets.TERMENBOX_DIRECTORY_SALT }}
 
+      # A channel with a pinned bundle key only stages its client here (the action sets BUNDLE_STAGED); the owner signs it and
+      # deploy-pages.yaml deploys it with the tag, and that run verifies the origin. Until then the origin serves the previous client.
+      - name: Say whether the client was only staged
+        id: staged
+        env:
+          STAGED: ${{ env.BUNDLE_STAGED }}
+        run: echo "staged=${STAGED:-false}" >> "$GITHUB_OUTPUT"
+
       - if: always()
         id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
@@ -879,11 +888,12 @@ jobs:
             ${{ secrets.REPORTER_APP_KEY }}
 
   # Reads the origin the way a browser does once the deployment is up; it holds no secret and runs code of this repository
-  # only. A failure leaves the deployment in place and turns the run red.
+  # only. A failure leaves the deployment in place and turns the run red. It does not run when the client was only staged
+  # for the owner's signature: the origin still serves the previous client, and the signed deploy (deploy-pages.yaml) verifies it.
   verify-origin:
     name: Verify the origin
     needs: [deploy]
-    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
+    if: ${{ !cancelled() && needs.deploy.result == 'success' && needs.deploy.outputs.staged != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 6
     permissions:
