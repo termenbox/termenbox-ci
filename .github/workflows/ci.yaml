@@ -986,7 +986,7 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           shared-key: static-${{ matrix.arch }}
-          key: ${{ matrix.target }}
+          key: ${{ matrix.target }}-ci
           save-if: ${{ github.event.client_payload.event == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
 
       - name: Build
@@ -994,11 +994,13 @@ jobs:
           RUSTFLAGS: -C target-feature=+crt-static
           CC_x86_64_unknown_linux_musl: musl-gcc
           CC_aarch64_unknown_linux_musl: musl-gcc
-        run: cargo build --release -p termenbox-server --target ${{ matrix.target }}
+        # The profile CI's browser jobs use: this binary is tested, not shipped (release-build builds the shipped one with
+        # fat LTO), and LTO over the server crate was 3.5 of the 5.2 minutes every installer leg waited for.
+        run: cargo build --profile ci -p termenbox-server --target ${{ matrix.target }}
 
       - name: Gate - the binary is fully static
         run: |
-          bin=target/${{ matrix.target }}/release/termenbox-server
+          bin=target/${{ matrix.target }}/ci/termenbox-server
           strip "$bin"
           file "$bin"
           # A static binary has no program interpreter and needs no shared library (ldd words this differently
@@ -1010,7 +1012,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: termenbox-server-musl-${{ matrix.arch }}
-          path: target/${{ matrix.target }}/release/termenbox-server
+          path: target/${{ matrix.target }}/ci/termenbox-server
           retention-days: 1
 
       - if: always()
