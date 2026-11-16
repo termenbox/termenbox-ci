@@ -146,6 +146,14 @@
   ],
   "sourceCallAllow": [
     {
+      "path": ".github/workflows/publish-wiki.yaml",
+      "contains": "termenbox/termenbox.git"
+    },
+    {
+      "path": ".github/workflows/deploy-site.yaml",
+      "contains": "repos/termenbox/termenbox/releases"
+    },
+    {
       "path": ".github/workflows/release-",
       "contains": "GH_REPO: termenbox/termenbox"
     },
