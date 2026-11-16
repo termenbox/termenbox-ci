@@ -3,11 +3,11 @@ name: Security Sweep
 # Monthly, run every recurring security check and post only the number of passing and failing checks and the NAMES of the
 # failing ones to the monthly `sweep` issue of the review repo. The scripts print nothing else; the full output goes to the
 # encrypted log. Code that runs beside a token is authored in this repo (sweep/). The `security` Environment has a branch
-# policy (main) and no reviewer: its tokens read, and only the `report` job holds the one token that writes issues.
+# policy (main) and no reviewer: its tokens read, and only the `report` job holds the one token that writes issues, minted from the publisher app.
 #   state  : reads the last seen manifest versions                         (SWEEP_READ_TOKEN)
 #   tools  : runs the source tree's tools; holds no secret but a checkout token that only the checkout step sees
 #   sweep  : runs the checks of this repo's sweep/ directory, with the read token and the repo-level tokens the expiry check reads
-#   report : posts the counts and names                                    (SWEEP_TOKEN)
+#   report : posts the counts and names                                    (publisher app)
 on:
   schedule:
     - cron: '23 4 3 * *'
@@ -135,9 +135,18 @@ jobs:
     environment: security
     permissions: {}
     steps:
+      - name: Token for the review repo
+        id: reviews
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.PUBLISHER_APP_ID }}
+          app-key: ${{ secrets.PUBLISHER_APP_KEY }}
+          repository: termenbox/termenbox-security
+          permissions: '{"issues":"write"}'
+
       - name: Post the counts and the failing names
         env:
-          GH_TOKEN: ${{ secrets.SWEEP_TOKEN }}
+          GH_TOKEN: ${{ steps.reviews.outputs.token }}
           REVIEW_REPO: termenbox/termenbox-security
           SUMMARY: ${{ needs.sweep.outputs.summary }}
           TOOLS: ${{ needs.tools.outputs.summary }}

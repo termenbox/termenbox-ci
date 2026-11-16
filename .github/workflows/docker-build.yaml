@@ -67,8 +67,8 @@ jobs:
     needs: approve
     if: ${{ !cancelled() && (needs.approve.result == 'success' || needs.approve.result == 'skipped') }}
     runs-on: ubuntu-latest
-    # A manual run pushes any tag but latest, so it passes the review gate below, which reads the review repo with REVIEWS_TOKEN, a
-    # secret of the beta Environment. A pull request and a release workflow's call have no Environment and pass no gate here.
+    # A manual run pushes any tag but latest, so it passes the review gate below, which reads the review repo with a publisher-app token minted from
+    # the key of the beta Environment. A pull request and a release workflow's call have no Environment and pass no gate here.
     environment: ${{ github.event_name == 'workflow_dispatch' && 'beta' || '' }}
     timeout-minutes: 5
     outputs:
@@ -134,11 +134,21 @@ jobs:
       # No image tag is pushed unless this step passes, so the build
       # jobs below (which need this one) never run. It covers a manual run; a pull request pushes
       # nothing and a release workflow (calling with its tags, after its own gate) is exempt.
+      - name: Token for the review repo
+        id: reviews
+        if: steps.p.outputs.run == 'true' && (github.event.client_payload.event || github.event_name) != 'pull_request' && inputs.tags == ''
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.PUBLISHER_APP_ID }}
+          app-key: ${{ secrets.PUBLISHER_APP_KEY }}
+          repository: termenbox/termenbox-security
+          permissions: '{"issues":"read"}'
+
       - name: Security review gate
         if: steps.p.outputs.run == 'true' && (github.event.client_payload.event || github.event_name) != 'pull_request' && inputs.tags == ''
         env:
           SHA: ${{ steps.p.outputs.sha }}
-          GH_TOKEN: ${{ secrets.REVIEWS_TOKEN }}
+          GH_TOKEN: ${{ steps.reviews.outputs.token }}
         run: |
           # Rule 1: the gate runs from master's copy of its script and the scripts it runs, not from the commit's checkout.
           set -eu
@@ -160,7 +170,7 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.REVIEWS_TOKEN }}
+            ${{ secrets.PUBLISHER_APP_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
 
   # One native runner per architecture: no QEMU, so the Rust build runs at full speed. Build cache lives in GHCR, one per channel and architecture (a channel never reads a cache another one writes)
