@@ -1,9 +1,9 @@
 // node scripts/check-gate-token.mjs : a "Security review gate" step reads the review repo, so it must carry the token
-// (GH_TOKEN from REVIEWS_TOKEN) and its job an Environment, which is where that secret lives. A gate without them would
+// (GH_TOKEN from the publisher-app token step) and its job an Environment, which is where the app key lives. A gate without them would
 // refuse every release for a reason nobody sees, or be edited into one that does not check. Prints file and line only.
 import { readdirSync, readFileSync } from "node:fs";
 
-const TOKEN = /GH_TOKEN:\s*\$\{\{\s*secrets\.REVIEWS_TOKEN\s*\}\}/;
+const TOKEN = /GH_TOKEN:\s*\$\{\{\s*steps\.[A-Za-z0-9_-]+\.outputs\.token\s*\}\}/;
 export function gateProblems(text) {
   const lines = text.split("\n");
   const problems = [];
@@ -11,7 +11,7 @@ export function gateProblems(text) {
     if (!/^\s*- name: Security review gate\s*$/.test(line)) return;
     let end = i + 1;
     while (end < lines.length && !/^\s*- /.test(lines[end]) && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end])) end++;
-    if (!TOKEN.test(lines.slice(i, end).join("\n"))) problems.push([i + 1, "the gate step has no GH_TOKEN from REVIEWS_TOKEN"]);
+    if (!TOKEN.test(lines.slice(i, end).join("\n"))) problems.push([i + 1, "the gate step has no GH_TOKEN from an app-token step"]);
     let start = i;
     while (start > 0 && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[start])) start--;
     const job = lines.slice(start, i).join("\n");

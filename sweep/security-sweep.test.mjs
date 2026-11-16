@@ -51,12 +51,12 @@ test('only the report job of the workflow holds the token that can write issues'
   const { splitJobs } = await import('./check-job-environments.mjs');
   const text = readFileSync(fileURLToPath(new URL('../.github/workflows/security-sweep.yaml', import.meta.url)), 'utf8');
   const jobs = Object.fromEntries(splitJobs(text).jobs.map((j) => [j.name, j.text]));
-  assert.ok(jobs.report.includes('secrets.SWEEP_TOKEN'));
+  assert.ok(jobs.report.includes('secrets.PUBLISHER_APP_KEY') && jobs.report.includes('"issues":"write"'));
   const secretsIn = (t) => [...t.matchAll(/secrets\.([A-Z_]+)/g)].map((m) => m[1]);
   assert.deepEqual(secretsIn(jobs.tools), ['REPORTER_APP_ID', 'REPORTER_APP_KEY']);
   assert.ok(!/environment:/.test(jobs.tools), 'the tools job runs source code and so holds no Environment');
   for (const name of ['state', 'sweep']) {
-    assert.ok(!jobs[name].includes('secrets.SWEEP_TOKEN'), name);
+    assert.ok(!jobs[name].includes('PUBLISHER_APP_KEY'), name);
     assert.ok(jobs[name].includes('secrets.SWEEP_READ_TOKEN'), name);
   }
 });
