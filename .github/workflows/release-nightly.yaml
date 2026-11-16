@@ -146,13 +146,14 @@ jobs:
     needs: select
     if: needs.select.outputs.run == 'true'
     permissions:
-      actions: read
       contents: write
       deployments: write
-      packages: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/release-build.yaml
     secrets: inherit
     with:
+      docker_tags: ${{ needs.select.outputs.docker_tags }}
       channel: nightly
       kid: n1
       version: ${{ needs.select.outputs.version }}
@@ -163,23 +164,6 @@ jobs:
       latest: false
       aliases: ${{ needs.select.outputs.aliases }}
       notes: 'Nightly build of develop at ${{ needs.select.outputs.sha }}. Not a supported release: it is for trying what is coming.'
-
-  # GitHub does not start a workflow for a tag its own token created, so the image is built by calling the workflow. It
-  # runs beside the release, which waits for the image tag and signs its digests into the manifest.
-  image:
-    name: Image
-    needs: select
-    if: needs.select.outputs.publish == 'true'
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    uses: ./.github/workflows/docker-build.yaml
-    secrets: inherit
-    with:
-      sha: ${{ needs.select.outputs.sha }}
-      version: ${{ needs.select.outputs.version }}
-      tags: ${{ needs.select.outputs.docker_tags }}
 
   deploy:
     name: Deploy the client

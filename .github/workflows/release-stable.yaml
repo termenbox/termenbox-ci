@@ -208,36 +208,21 @@ jobs:
           # A slow refresh: a watch at the default 3 s costs about a thousand API calls an hour, the limit of this token.
           gh run watch "$id" -i 30 --exit-status >/dev/null || { echo "the full run of $SHA is red or was cancelled (run $id): a stable release needs a new commit with a green full run"; exit 1; }
 
-  # GitHub does not start a workflow for a tag its own token created, and a second run would need its own approvals, so
-  # the image is built by calling the workflow in this run. The release waits for the image tag and signs its digests.
-  image:
-    name: Image
-    needs: [gate, full-ci]
-    if: ${{ !cancelled() && needs.gate.result == 'success' && needs.full-ci.result == 'success' && needs.gate.outputs.run == 'true' && needs.gate.outputs.publish == 'true' }}
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    uses: ./.github/workflows/docker-build.yaml
-    secrets: inherit
-    with:
-      sha: ${{ github.event.client_payload.sha }}
-      version: ${{ needs.gate.outputs.version }}
-      tags: ${{ needs.gate.outputs.docker_tags }}
-      channel: stable
-
+  # The release calls release-build.yaml, which also builds the image (its `Image` job) beside the binaries and records the
+  # digests of the finished tag for the signed manifest; the call needs packages and id-token write for that job.
   release:
     name: Release
     needs: [gate, full-ci]
     if: ${{ !cancelled() && needs.gate.result == 'success' && needs.gate.outputs.run == 'true' && (needs.full-ci.result == 'success' || needs.full-ci.result == 'skipped') }}
     permissions:
-      actions: read
       contents: write
       deployments: write
-      packages: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/release-build.yaml
     secrets: inherit
     with:
+      docker_tags: ${{ needs.gate.outputs.docker_tags }}
       channel: stable
       kid: r1
       version: ${{ needs.gate.outputs.version }}
