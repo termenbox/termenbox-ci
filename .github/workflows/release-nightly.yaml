@@ -9,7 +9,7 @@ name: Release (nightly)
 #
 # It publishes to the nightly/ path of the R2 bucket and to the Releases of the product repo (release-build.yaml), and nothing else: no stable or beta path, key or alias. It does not call the security review gate.
 # The Releases it reads are those of the public product repo, with the workflow token (CI_TOKEN and CI_REPO below); the
-# prune job deletes in them with MIRROR_TOKEN of the nightly environment; the other GH_TOKEN reads the source.
+# prune job deletes in them with a publisher-app token; the other GH_TOKEN reads the source.
 
 on:
   schedule:
