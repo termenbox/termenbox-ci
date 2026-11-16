@@ -21,7 +21,7 @@ jobs:
     steps:
       - id: rt-src
         name: Token for the next step (contents)
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}

@@ -43,7 +43,7 @@ jobs:
     steps:
       - id: rt-gate
         name: Token for the next step (contents)
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
@@ -81,9 +81,9 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@6ad709fb130567bf973507be868833de2df92f51
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@6ad709fb130567bf973507be868833de2df92f51
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -129,7 +129,7 @@ jobs:
       # (third-party code) never runs with it and the checkout keeps no credential in .git/config.
       - id: rt-master
         name: Token for the next step (contents)
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
@@ -163,7 +163,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@6ad709fb130567bf973507be868833de2df92f51
         with:
           key: ${{ secrets.LOG_KEY }}
           name: deploy-${{ strategy.job-index }}

@@ -56,14 +56,14 @@ jobs:
       fail: ${{ steps.finish.outputs.summary }}
       tag: ${{ steps.rel.outputs.tag }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@6ad709fb130567bf973507be868833de2df92f51
 
       # The tag comes from the title of the release run ("Release (stable) · v0.1.59 · <commit>") or from the input; it is
       # checked to be exactly vX.Y.Z before anything uses it, and the commit it names is read from the source repo, not taken
       # from the run.
       - id: rt-rel
         name: Token for the next step (contents)
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
@@ -89,7 +89,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@6ad709fb130567bf973507be868833de2df92f51
         with:
           sha: ${{ steps.rel.outputs.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -128,7 +128,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@6ad709fb130567bf973507be868833de2df92f51
         with:
           key: ${{ secrets.LOG_KEY }}
           name: wiki-${{ strategy.job-index }}
@@ -148,7 +148,7 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@6ad709fb130567bf973507be868833de2df92f51
 
       # No checkout and no source script: the pages are data built in the job before.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
@@ -167,7 +167,7 @@ jobs:
 
       - name: Token for the public product repo
         id: publisher
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.PUBLISHER_APP_ID }}
           app-key: ${{ secrets.PUBLISHER_APP_KEY }}
@@ -210,7 +210,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@6ad709fb130567bf973507be868833de2df92f51
         with:
           key: ${{ secrets.LOG_KEY }}
           name: wiki-push-${{ strategy.job-index }}

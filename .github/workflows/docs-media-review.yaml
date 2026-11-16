@@ -36,11 +36,11 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@6ad709fb130567bf973507be868833de2df92f51
 
       - id: rt-s43
         name: Token for the next step (issues/pull_requests)
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
@@ -77,7 +77,7 @@ jobs:
           perm=$(gh api "repos/termenbox/termenbox-source/collaborators/$ACTOR/permission" --jq .permission 2>/dev/null || echo none)
           case "$perm" in write|maintain|admin) echo "ok=true" >> "$GITHUB_OUTPUT" ;; *) echo "ok=false" >> "$GITHUB_OUTPUT"; echo "ignored: $ACTOR has $perm" ;; esac
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@6ad709fb130567bf973507be868833de2df92f51
         with:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -129,7 +129,7 @@ jobs:
       - id: rt-s127
         name: Token for the next step (issues/pull_requests)
         if: steps.ask.outputs.action == 'approve'
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
@@ -137,7 +137,7 @@ jobs:
       - id: docs-pub
         name: Token to push the media branch and open its pull request
         if: steps.ask.outputs.action == 'approve'
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.PUBLISHER_APP_ID }}
           app-key: ${{ secrets.PUBLISHER_APP_KEY }}
@@ -178,7 +178,7 @@ jobs:
       - id: rt-s156
         name: Token for the next step (issues/pull_requests)
         if: steps.ask.outputs.action == 'regen'
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
@@ -204,7 +204,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@6ad709fb130567bf973507be868833de2df92f51
         with:
           key: ${{ secrets.LOG_KEY }}
           name: review-${{ strategy.job-index }}

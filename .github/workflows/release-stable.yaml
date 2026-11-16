@@ -58,10 +58,10 @@ jobs:
       docker_tags: ${{ steps.g.outputs.docker_tags }}
       publish: ${{ steps.g.outputs.publish }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
-      - uses: termenbox/termenbox-ci/.github/actions/release-tools@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@6ad709fb130567bf973507be868833de2df92f51
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@6ad709fb130567bf973507be868833de2df92f51
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@6ad709fb130567bf973507be868833de2df92f51
         with:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -72,7 +72,7 @@ jobs:
           branch: master
       - id: rt-commits
         name: Token for the next step (contents/statuses)
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
@@ -113,7 +113,7 @@ jobs:
       - name: Token for the review repo
         id: reviews
         if: steps.g.outputs.run == 'true'
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.PUBLISHER_APP_ID }}
           app-key: ${{ secrets.PUBLISHER_APP_KEY }}
@@ -146,7 +146,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@6ad709fb130567bf973507be868833de2df92f51
         with:
           key: ${{ secrets.LOG_KEY }}
           name: gate-${{ strategy.job-index }}

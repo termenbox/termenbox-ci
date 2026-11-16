@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@6ad709fb130567bf973507be868833de2df92f51
       - id: rt-develop
         name: Token for the next step (contents)
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@6ad709fb130567bf973507be868833de2df92f51
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
@@ -26,7 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.rt-develop.outputs.token }}
         run: echo "sha=$(gh api repos/termenbox/termenbox-source/commits/develop -q .sha 2>/dev/null)" >> "$GITHUB_OUTPUT"
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@6ad709fb130567bf973507be868833de2df92f51
         with:
           sha: ${{ steps.sha.outputs.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -38,7 +38,7 @@ jobs:
           head -n 3 src/CLAUDE.md
           cargo --definitely-not-a-flag
       - if: always()
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@6ad709fb130567bf973507be868833de2df92f51
         with:
           key: ${{ secrets.LOG_KEY }}
           name: leak
