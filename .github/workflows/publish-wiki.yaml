@@ -6,7 +6,7 @@ run-name: "Publish the wiki · ${{ github.event.workflow_run.display_title || in
 # the tag, the server crate and the version on every docs page must agree (check-release.mjs) or nothing is written. The run
 # waits for the same one review as a release (approve-stable) because it writes to a public repo. Writing is off until the
 # repository variable WIKI_PUBLISH is `true`; a run by hand is a dry run unless it says otherwise. The job that runs the source's
-# scripts (build) holds no token that writes; the job that holds MIRROR_TOKEN (push) runs none of the source's code and only copies
+# scripts (build) holds no token that writes; the job that mints the publisher-app token (push) runs none of the source's code and only copies
 # the built pages, which it first checks to be plain files.
 
 on:
@@ -165,13 +165,22 @@ jobs:
           [ -z "$(find out/wiki ! -type f ! -type d)" ] || { echo "the built wiki holds something that is not a plain file"; exit 1; }
           [ -z "$(find out/wiki -path '*/.*' -o -name '.git*')" ] || { echo "the built wiki holds a hidden path"; exit 1; }
 
+      - name: Token for the public product repo
+        id: publisher
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.PUBLISHER_APP_ID }}
+          app-key: ${{ secrets.PUBLISHER_APP_KEY }}
+          repository: termenbox/termenbox
+          permissions: '{"contents":"write"}'
+
       - name: Commit it to the public repo
         env:
           TAG: ${{ needs.wiki.outputs.tag }}
           EVENT: ${{ github.event_name }}
           DRY: ${{ inputs.dry_run }}
           SWITCH: ${{ vars.WIKI_PUBLISH }}
-          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+          PUBLISHER_TOKEN: ${{ steps.publisher.outputs.token }}
         run: |
           set +x
           publish=false
@@ -182,7 +191,7 @@ jobs:
             find out/wiki -type f | wc -l
             exit 0
           fi
-          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$MIRROR_TOKEN" | base64 -w0)"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUBLISHER_TOKEN" | base64 -w0)"
           echo "::add-mask::${auth#AUTHORIZATION: basic }"
           git -c http.extraheader="$auth" clone -q --depth 1 --branch main https://github.com/termenbox/termenbox.git pub
           cd pub
@@ -210,5 +219,5 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.LOG_KEY }}
-            ${{ secrets.MIRROR_TOKEN }}
+            ${{ secrets.PUBLISHER_APP_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
