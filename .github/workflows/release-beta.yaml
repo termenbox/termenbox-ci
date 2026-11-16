@@ -144,36 +144,19 @@ jobs:
             ${{ secrets.PUBLISHER_APP_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
 
-  # GitHub does not start a workflow for a tag its own token created, and a second run would need its own approvals, so
-  # the image is built by calling the workflow in this run. The release waits for the image tag and signs its digests.
-  image:
-    name: Image
-    needs: gate
-    if: needs.gate.outputs.run == 'true' && needs.gate.outputs.publish == 'true'
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    uses: ./.github/workflows/docker-build.yaml
-    secrets: inherit
-    with:
-      sha: ${{ github.event.client_payload.sha }}
-      version: ${{ needs.gate.outputs.version }}
-      tags: ${{ needs.gate.outputs.docker_tags }}
-      channel: beta
-
   release:
     name: Release
     needs: gate
     if: needs.gate.outputs.run == 'true'
     permissions:
-      actions: read
       contents: write
       deployments: write
-      packages: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/release-build.yaml
     secrets: inherit
     with:
+      docker_tags: ${{ needs.gate.outputs.docker_tags }}
       channel: beta
       kid: b1
       version: ${{ needs.gate.outputs.version }}

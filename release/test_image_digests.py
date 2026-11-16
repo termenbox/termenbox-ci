@@ -8,7 +8,7 @@ import tempfile
 from unittest import mock
 
 import image_digests
-from image_digests import digests_from_index, failed_job, failed_run, image_problem
+from image_digests import digests_from_index, image_problem
 
 A, B, C = ("sha256:" + c * 64 for c in "abc")
 
@@ -33,40 +33,6 @@ class ImageDigests(unittest.TestCase):
     def test_two_different_images_for_one_architecture_are_refused(self):
         with self.assertRaises(ValueError):
             digests_from_index({"manifests": [entry("amd64", A), entry("amd64", C), entry("arm64", B)]})
-
-
-def job(name, conclusion):
-    return {"name": name, "status": "completed" if conclusion else "in_progress", "conclusion": conclusion}
-
-
-def run(id, title, conclusion):
-    return {"id": id, "display_title": title, "conclusion": conclusion}
-
-
-class BuildEndedWithoutAnImage(unittest.TestCase):
-    def test_a_failed_job_of_the_image_call_ends_the_wait_and_this_jobs_own_name_does_not(self):
-        jobs = [job("Release / Image digests", None), job("Image / Plan the image tags", "failure"), job("Image / Build amd64", "skipped")]
-        self.assertEqual(failed_job(jobs, "Image / "), ("Image / Plan the image tags", "failure"))
-
-    def test_a_cancelled_build_ends_the_wait(self):
-        self.assertEqual(failed_job([job("Image / Build arm64", "cancelled")], "Image / "), ("Image / Build arm64", "cancelled"))
-
-    def test_running_succeeded_and_skipped_jobs_do_not(self):
-        jobs = [job("Image / Plan the image tags", "success"), job("Image / Build amd64", None), job("Image / Build arm64", "skipped")]
-        self.assertIsNone(failed_job(jobs, "Image / "))
-        self.assertIsNone(failed_job([], "Image / "))
-
-    def test_a_failure_of_another_job_does_not(self):
-        self.assertIsNone(failed_job([job("Build (x86_64)", "failure")], "Image / "))
-
-    def test_the_newest_run_with_the_title_decides(self):
-        runs = [run(5, "Image v1.2.3", "failure"), run(9, "Image v1.2.3", None), run(7, "Image v1.2.2", "failure")]
-        self.assertIsNone(failed_run(runs, "Image v1.2.3"))
-        self.assertEqual(failed_run([run(5, "Image v1.2.3", "success"), run(8, "Image v1.2.3", "cancelled")], "Image v1.2.3"), ("Image v1.2.3", "cancelled"))
-
-    def test_no_run_with_the_title_or_another_titles_failure_does_not(self):
-        self.assertIsNone(failed_run([], "Image v1.2.3"))
-        self.assertIsNone(failed_run([run(7, "Image v1.2.2", "failure")], "Image v1.2.3"))
 
 
 SHA = "1" * 40
@@ -110,11 +76,11 @@ class ImageDigestMustComeFromThisRunsBuild(unittest.TestCase):
                 image_digests.main(argv)
             self.assertEqual(json.load(open(out)), {"x86_64": A, "aarch64": B})
 
-    def test_the_run_start_is_the_newest_run_with_the_title(self):
-        runs = [{"id": 5, "display_title": "Image v1", "run_started_at": "2026-11-07T08:00:00Z", "head_sha": SHA},
-                {"id": 9, "display_title": "Image v1", "run_started_at": START, "head_sha": SHA}]
-        self.assertEqual(image_digests.run_start(runs, "Image v1"), START)
-        self.assertIsNone(image_digests.run_start(runs, "Image v2"))
+    def test_a_tag_that_is_not_there_yet_is_refused_at_once(self):
+        with mock.patch.object(image_digests, "inspect", side_effect=ValueError("manifest unknown")):
+            with self.assertRaises(SystemExit) as raised:
+                image_digests.main(["x", "ghcr.io/o/i:1.2.3", "/nonexistent/out.json", "--commit", SHA, "--run-start", START])
+        self.assertIn("manifest unknown", str(raised.exception))
 
 
 if __name__ == "__main__":

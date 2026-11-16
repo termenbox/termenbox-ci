@@ -36,6 +36,7 @@ on:
       aliases: { description: 'space separated rolling releases that may point at it', required: false, type: string, default: '' }
       deploy: { description: 'deploy the channel client after publishing, in the same approved job (stable and beta)', required: false, type: boolean, default: false }
       notes: { description: 'text put before the generated release notes', required: false, type: string, default: '' }
+      docker_tags: { description: 'space separated image tags the Image job pushes (docker-build.yaml)', required: true, type: string }
 
 permissions:
   contents: read
@@ -186,21 +187,34 @@ jobs:
             ${{ secrets.LOG_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
 
-  # Every channel's release workflow calls docker-build.yaml as its `Image` job beside this workflow, so the image may
-  # still be building: wait for the multi-architecture tag and record the digests the signed manifest will name. It holds
-  # no secret. A dry run pushes none.
-  # The build is not a job this one needs, so while it waits the script asks whether the "Image / " jobs of this run
-  # already failed or were cancelled and then stops at once (the 70 minutes stay as the backstop). The manifest job needs
-  # this one, so a failed image build leaves it skipped and nothing is published.
+  # The image is built by a job of this workflow that calls docker-build.yaml beside `build`: GitHub does not start a
+  # workflow for a tag its own token created, and a second run would need its own approvals. The job after it reads the
+  # digests of the finished tag once; a dry run builds and pushes no image.
+  docker:
+    name: Image
+    if: inputs.publish
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/docker-build.yaml
+    secrets: inherit
+    with:
+      sha: ${{ inputs.sha }}
+      version: ${{ inputs.version }}
+      tags: ${{ inputs.docker_tags }}
+      channel: ${{ inputs.channel }}
+
+  # Records the digests the signed manifest will name, from the tag the job above pushed. It holds no secret but the
+  # registry login. The manifest job needs this one, so a failed image build leaves it skipped and nothing is published.
   image:
     name: Image digests
-    needs: build
+    needs: [build, docker]
     if: inputs.publish
     environment: ${{ inputs.channel }}
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 10
     permissions:
-      actions: read
       contents: read
       packages: read
     outputs:
@@ -220,13 +234,13 @@ jobs:
           registry: ghcr.io
           username: ${{ vars.GHCR_USER || 'termenbox' }}
           password: ${{ secrets.GHCR_TOKEN }}
-      - name: Wait for the image of this version and read its digests
+      - name: Read the digests of this version's image
         env:
           VERSION: ${{ inputs.version }}
           SHA: ${{ inputs.sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_STARTED: ${{ github.run_started_at }}
         run: |
-          python3 "$TB_RELEASE_TOOLS/image_digests.py" "ghcr.io/termenbox/termenbox:${VERSION}" image-digests.json --commit "$SHA" --wait 4200 --build-jobs "Image / "
+          python3 "$TB_RELEASE_TOOLS/image_digests.py" "ghcr.io/termenbox/termenbox:${VERSION}" image-digests.json --commit "$SHA" --run-start "$RUN_STARTED"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-image
@@ -244,7 +258,6 @@ jobs:
           app-key: ${{ secrets.REPORTER_APP_KEY }}
           secrets: |-
             ${{ secrets.GHCR_TOKEN }}
-            ${{ secrets.GITHUB_TOKEN }}
             ${{ secrets.LOG_KEY }}
             ${{ secrets.REPORTER_APP_KEY }}
 
