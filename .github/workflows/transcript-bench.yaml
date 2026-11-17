@@ -123,7 +123,7 @@ jobs:
               PERF=$(command -v perf || ls /usr/lib/linux-tools/*/perf 2>/dev/null | head -1)
               if [ -n "$PERF" ]; then
                 sudo sysctl -q -w kernel.perf_event_paranoid=-1 kernel.kptr_restrict=0
-                sudo "$PERF" record -q -F 999 -g -o perf.data -p "$PID" -- sleep "$SECS" 2>>perf.err &
+                sudo "$PERF" record -q --no-inherit -F 999 -g -o perf.data -p "$PID" -- sleep "$SECS" 2>>perf.err &
                 PERFPID=$!
               fi
             fi
@@ -160,6 +160,7 @@ jobs:
           test -s perf.data || { echo "no perf data: $(head -c 300 perf.err 2>/dev/null)"; exit 0; }
           PERF=$(command -v perf || ls /usr/lib/linux-tools/*/perf 2>/dev/null | head -1)
           { echo '### self time by shared object'; sudo "$PERF" report -i perf.data --no-children --sort dso -g none --stdio 2>/dev/null | grep -v '^#' | grep -v '^$' | head -8
+            echo '### server only: top symbols (dso, symbol)'; sudo "$PERF" report -i perf.data --no-children --sort dso,sym -g none --stdio 2>/dev/null | grep -v '^#' | grep -v '^$' | head -30
             echo '### top symbols by self time'; sudo "$PERF" report -i perf.data --no-children --sort sym -g none --stdio 2>/dev/null | grep -v '^#' | grep -v '^$' | head -25
             echo '### top source lines by self time'; sudo "$PERF" report -i perf.data --no-children --sort srcline -g none --stdio 2>/dev/null | grep -v '^#' | grep -v '^$' | head -20; } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Stop and encrypt logs
