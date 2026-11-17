@@ -86,13 +86,14 @@ jobs:
           set +e
           S="$PWD/src/scripts"
           export SIDE TERMENBOX_TMUX="$(command -v tmux)"
+          mkdir -p "$HOME/.local/bin"; ln -sf "$TERMENBOX_TMUX" "$HOME/.local/bin/termenbox-tmux"
           D=$SIDE/tm; mkdir -p "$D"
           sh "$S/scan-side-server.sh" sessions "$D" "$N" >> setup.log 2>&1
           python3 "$S/scan-side-transcripts.py" gen s "$N" "$MB" >> setup.log 2>&1
           sh "$S/scan-side-server.sh" start s "$D" 18080 "$PWD/src/target/release/termenbox-server" >> setup.log 2>&1
           i=0; while [ ! -f "$SIDE/s/c/event.key" ] && [ $i -lt 60 ]; do sleep 1; i=$((i+1)); done
           sleep 15
-          echo "panes: $(tmux -L termenbox list-panes -a 2>/dev/null | wc -l)  transcripts: $(ls $SIDE/s/h/.claude/projects/p | wc -l) of $(du -sh $SIDE/s/h/.claude/projects/p | cut -f1)"
+          echo "panes: $(TMUX_TMPDIR=$D tmux -L termenbox list-panes -a 2>/dev/null | wc -l)  transcripts: $(ls $SIDE/s/h/.claude/projects/p | wc -l) of $(du -sh $SIDE/s/h/.claude/projects/p | cut -f1)"
           test -f "$SIDE/s/c/event.key" && echo "exit=0" >> "$GITHUB_OUTPUT"
       - name: Measure two phases
         id: bench
@@ -107,6 +108,7 @@ jobs:
           set +e
           S="$PWD/src/scripts"; D=$SIDE/tm
           export SIDE TERMENBOX_TMUX="$(command -v tmux)"
+          : > cpu.out
           PID=$(sh "$S/scan-side-server.sh" pid s)
           sh "$S/scan-side-server.sh" work "$D" "$K" "$N"
           METER=$(find $SIDE/s -name scan-meter.jsonl | head -1)
@@ -125,10 +127,12 @@ jobs:
                 PERFPID=$!
               fi
             fi
-            python3 "$S/scan-side-cpu.py" "$SECS" "$D" "$PID" | sed "s/^/[$name cpu] /"
+            python3 "$S/scan-side-cpu.py" "$SECS" "$D" "$PID" 2>&1 | sed "s/^/[$name cpu] /" | tee -a cpu.out
             wait $DRIVE; [ -n "$PERFPID" ] && wait $PERFPID
             sample "m-$name-1.json"
           }
+          # the spend reads every transcript whole once on first sight: wait it out so the phases show the steady state
+          sleep 90
           phase a 2 2
           phase b 0.5 1
           python3 - "$SECS" "$K" <<'P' | tee -a "$GITHUB_STEP_SUMMARY"
@@ -148,14 +152,15 @@ jobs:
                   print(f"| {ph} | {rate} | {c} | {d['opens']/hooks:.2f} | {d['bytes_read']/hooks:.0f} | {d['bytes_scanned']/hooks:.0f} | {d['lines_parsed']/hooks:.2f} |")
               print(f"| {ph} | {rate} | window | {dt:.0f} s, about {hooks:.0f} hooks | | | |")
           P
-          echo "exit=0" >> "$GITHUB_OUTPUT"
+          grep -q "cpu\]" cpu.out && echo "exit=0" >> "$GITHUB_OUTPUT"
       - name: Where the CPU went (perf)
         if: always() && steps.bench.outputs.exit == '0'
         run: |
           set +e
           test -s perf.data || { echo "no perf data: $(head -c 300 perf.err 2>/dev/null)"; exit 0; }
           PERF=$(command -v perf || ls /usr/lib/linux-tools/*/perf 2>/dev/null | head -1)
-          { echo '### top symbols by self time'; sudo "$PERF" report -i perf.data --no-children --sort sym -g none --stdio 2>/dev/null | grep -v '^#' | grep -v '^$' | head -25
+          { echo '### self time by shared object'; sudo "$PERF" report -i perf.data --no-children --sort dso -g none --stdio 2>/dev/null | grep -v '^#' | grep -v '^$' | head -8
+            echo '### top symbols by self time'; sudo "$PERF" report -i perf.data --no-children --sort sym -g none --stdio 2>/dev/null | grep -v '^#' | grep -v '^$' | head -25
             echo '### top source lines by self time'; sudo "$PERF" report -i perf.data --no-children --sort srcline -g none --stdio 2>/dev/null | grep -v '^#' | grep -v '^$' | head -20; } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Stop and encrypt logs
         if: always()
