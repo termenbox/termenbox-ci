@@ -152,7 +152,7 @@ jobs:
                   print(f"| {ph} | {rate} | {c} | {d['opens']/hooks:.2f} | {d['bytes_read']/hooks:.0f} | {d['bytes_scanned']/hooks:.0f} | {d['lines_parsed']/hooks:.2f} |")
               print(f"| {ph} | {rate} | window | {dt:.0f} s, about {hooks:.0f} hooks | | | |")
           P
-          grep -q "cpu\]" cpu.out && echo "exit=0" >> "$GITHUB_OUTPUT"
+          grep -q "cpu\] .*%" cpu.out && ! grep -q Traceback cpu.out && echo "exit=0" >> "$GITHUB_OUTPUT"
       - name: Where the CPU went (perf)
         if: always() && steps.bench.outputs.exit == '0'
         run: |
