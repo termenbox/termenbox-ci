@@ -1,0 +1,177 @@
+name: Transcript bench
+
+# A one-shot harness for a transcript-reading benchmark: it builds the
+# server with symbols and frame pointers, starts it isolated over a tmux server holding N replay panes, writes N
+# transcripts of a few MB, and drives K of them with appended lines and hook lines at two rates. It prints the server's
+# scan-meter deltas per transcript consumer (opens, bytes read, bytes scanned, lines parsed per hook), the CPU split
+# of the run and, when perf can be installed, the top symbols and source lines. Every build output goes to a file that is
+# uploaded encrypted. The data is synthetic. Never add a pull_request trigger: a fork PR could change this file and print
+# the checkout.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Source ref to build and run
+        default: develop
+      panes:
+        description: Panes (and transcripts)
+        default: '25'
+      working:
+        description: Workspaces appending lines and sending hooks
+        default: '8'
+      megabytes:
+        description: Size of each transcript in MB
+        default: '8'
+      seconds:
+        description: Seconds per phase
+        default: '90'
+      perf:
+        description: Profile the first phase with perf (best effort)
+        default: 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - id: rt-src
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
+      - name: Check out the ref
+        env:
+          TOKEN: ${{ steps.rt-src.outputs.token }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set +x
+          git -c credential.helper= clone --quiet "https://x-access-token:${TOKEN}@github.com/termenbox/termenbox-source.git" src >/dev/null 2>&1
+          git -C src remote set-url origin https://github.com/termenbox/termenbox-source.git
+          sha=$(git -C src rev-parse --verify --quiet "origin/$REF" || git -C src rev-parse --verify --quiet "$REF") || { echo "no such ref"; exit 1; }
+          git -C src checkout --quiet --detach "$sha" >/dev/null 2>&1
+          echo "checked out ${sha}"
+      - name: Install tmux and perf
+        run: |
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -y -qq tmux >/dev/null 2>&1 || true
+          if [ "${{ inputs.perf }}" = true ]; then
+            sudo apt-get install -y -qq "linux-tools-$(uname -r)" >/dev/null 2>&1 \
+              || sudo apt-get install -y -qq linux-tools-generic >/dev/null 2>&1 || true
+          fi
+          command -v tmux; PERF=$(command -v perf || ls /usr/lib/linux-tools/*/perf 2>/dev/null | head -1); echo "perf: ${PERF:-none}"
+      - name: Build the server with symbols (output withheld)
+        id: build
+        working-directory: src
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: '1'
+          CARGO_PROFILE_RELEASE_STRIP: none
+          RUSTFLAGS: -Cforce-frame-pointers=yes
+        run: |
+          set +e
+          cargo build --release -p termenbox-server > ../build.log 2>&1
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+      - name: Start the side server over the panes and transcripts
+        id: start
+        if: steps.build.outputs.exit == '0'
+        env:
+          SIDE: /tmp/tbs
+          N: ${{ inputs.panes }}
+          MB: ${{ inputs.megabytes }}
+        run: |
+          set +e
+          S="$PWD/src/scripts"
+          export SIDE TERMENBOX_TMUX="$(command -v tmux)"
+          D=$SIDE/tm; mkdir -p "$D"
+          sh "$S/scan-side-server.sh" sessions "$D" "$N" >> setup.log 2>&1
+          python3 "$S/scan-side-transcripts.py" gen s "$N" "$MB" >> setup.log 2>&1
+          sh "$S/scan-side-server.sh" start s "$D" 18080 "$PWD/src/target/release/termenbox-server" >> setup.log 2>&1
+          i=0; while [ ! -f "$SIDE/s/c/event.key" ] && [ $i -lt 60 ]; do sleep 1; i=$((i+1)); done
+          sleep 15
+          echo "panes: $(tmux -L termenbox list-panes -a 2>/dev/null | wc -l)  transcripts: $(ls $SIDE/s/h/.claude/projects/p | wc -l) of $(du -sh $SIDE/s/h/.claude/projects/p | cut -f1)"
+          test -f "$SIDE/s/c/event.key" && echo "exit=0" >> "$GITHUB_OUTPUT"
+      - name: Measure two phases
+        id: bench
+        if: steps.start.outputs.exit == '0'
+        env:
+          SIDE: /tmp/tbs
+          N: ${{ inputs.panes }}
+          K: ${{ inputs.working }}
+          SECS: ${{ inputs.seconds }}
+          WITH_PERF: ${{ inputs.perf }}
+        run: |
+          set +e
+          S="$PWD/src/scripts"; D=$SIDE/tm
+          export SIDE TERMENBOX_TMUX="$(command -v tmux)"
+          PID=$(sh "$S/scan-side-server.sh" pid s)
+          sh "$S/scan-side-server.sh" work "$D" "$K" "$N"
+          METER=$(find $SIDE/s -name scan-meter.jsonl | head -1)
+          echo "runner: $(nproc) cores, load $(cut -d' ' -f1-3 /proc/loadavg), server pid $PID, meter ${METER:+found}"
+          sample() { sleep 11; tail -1 "$METER" > "$1"; }
+          phase() { # name period hook_every hooks_per_second_per_workspace
+            name=$1; period=$2; every=$3
+            sample "m-$name-0.json"
+            python3 "$S/scan-side-transcripts.py" drive s "$N" "$K" "$SECS" "$period" "$every" &
+            DRIVE=$!
+            if [ "$name" = a ] && [ "$WITH_PERF" = true ]; then
+              PERF=$(command -v perf || ls /usr/lib/linux-tools/*/perf 2>/dev/null | head -1)
+              if [ -n "$PERF" ]; then
+                sudo sysctl -q -w kernel.perf_event_paranoid=-1 kernel.kptr_restrict=0
+                sudo "$PERF" record -q -F 999 -g -o perf.data -p "$PID" -- sleep "$SECS" 2>>perf.err &
+                PERFPID=$!
+              fi
+            fi
+            python3 "$S/scan-side-cpu.py" "$SECS" "$D" "$PID" | sed "s/^/[$name cpu] /"
+            wait $DRIVE; [ -n "$PERFPID" ] && wait $PERFPID
+            sample "m-$name-1.json"
+          }
+          phase a 2 2
+          phase b 0.5 1
+          python3 - "$SECS" "$K" <<'P' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, sys
+          secs, k = int(sys.argv[1]), int(sys.argv[2])
+          rates = {"a": 1 / 4, "b": 2.0}  # hooks a second per working workspace
+          print("| phase | hooks/s/ws | consumer | opens/hook | read B/hook | scanned B/hook | parsed/hook |\n|---|---|---|---|---|---|---|")
+          for ph, rate in rates.items():
+              try:
+                  a, b = (json.load(open(f"m-{ph}-{i}.json")) for i in (0, 1))
+              except Exception as e:
+                  print(f"| {ph} | - | no sample ({e}) | | | | |"); continue
+              dt = (b["t_ms"] - a["t_ms"]) / 1000
+              hooks = rate * k * dt
+              for c in ("timeline", "usage", "spend", "status_tail"):
+                  d = {f: b["transcripts"][c][f] - a["transcripts"][c][f] for f in b["transcripts"][c]}
+                  print(f"| {ph} | {rate} | {c} | {d['opens']/hooks:.2f} | {d['bytes_read']/hooks:.0f} | {d['bytes_scanned']/hooks:.0f} | {d['lines_parsed']/hooks:.2f} |")
+              print(f"| {ph} | {rate} | window | {dt:.0f} s, about {hooks:.0f} hooks | | | |")
+          P
+          echo "exit=0" >> "$GITHUB_OUTPUT"
+      - name: Where the CPU went (perf)
+        if: always() && steps.bench.outputs.exit == '0'
+        run: |
+          set +e
+          test -s perf.data || { echo "no perf data: $(head -c 300 perf.err 2>/dev/null)"; exit 0; }
+          PERF=$(command -v perf || ls /usr/lib/linux-tools/*/perf 2>/dev/null | head -1)
+          { echo '### top symbols by self time'; sudo "$PERF" report -i perf.data --no-children --sort sym -g none --stdio 2>/dev/null | grep -v '^#' | grep -v '^$' | head -25
+            echo '### top source lines by self time'; sudo "$PERF" report -i perf.data --no-children --sort srcline -g none --stdio 2>/dev/null | grep -v '^#' | grep -v '^$' | head -20; } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Stop and encrypt logs
+        if: always()
+        env:
+          LOG_KEY: ${{ secrets.LOG_KEY }}
+        run: |
+          sh src/scripts/scan-side-server.sh stopall 2>/dev/null || true
+          touch build.log setup.log perf.err
+          cat build.log setup.log perf.err > all.log
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:LOG_KEY -in all.log -out all.log.enc 2>/dev/null || true
+          rm -f build.log setup.log perf.err all.log perf.data
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: transcript-bench-log-encrypted
+          path: all.log.enc
+          retention-days: 7
+      - name: Result
+        run: test "${{ steps.build.outputs.exit }}" = 0 && test "${{ steps.start.outputs.exit }}" = 0 && test "${{ steps.bench.outputs.exit }}" = 0
