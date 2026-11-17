@@ -51,8 +51,11 @@ jobs:
           set +x
           git -c credential.helper= clone --quiet "https://x-access-token:${TOKEN}@github.com/termenbox/termenbox-source.git" src >/dev/null 2>&1
           git -C src remote set-url origin https://github.com/termenbox/termenbox-source.git
-          git -C src worktree add --quiet ../a "$REF_A" >/dev/null 2>&1
-          git -C src worktree add --quiet ../b "$REF_B" >/dev/null 2>&1
+          for v in a b; do
+            ref=$REF_A; [ "$v" = b ] && ref=$REF_B
+            sha=$(git -C src rev-parse --verify --quiet "origin/$ref" || git -C src rev-parse --verify --quiet "$ref") || { echo "no ref for $v"; exit 1; }
+            git -C src worktree add --quiet --detach "../$v" "$sha" >/dev/null 2>&1 || { echo "worktree $v failed"; exit 1; }
+          done
           echo "checked out A=${REF_A} B=${REF_B}"
       - name: Build both daemons (output withheld)
         id: build
@@ -102,7 +105,8 @@ jobs:
         env:
           LOG_KEY: ${{ secrets.LOG_KEY }}
         run: |
-          cat build.log bench.err > all.log 2>/dev/null
+          touch build.log bench.err
+          cat build.log bench.err > all.log
           openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:LOG_KEY -in all.log -out all.log.enc 2>/dev/null || true
           rm -f build.log bench.err all.log
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
