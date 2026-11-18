@@ -149,7 +149,7 @@ jobs:
                   print(f"| {ph} | - | no sample ({e}) | | | | |"); continue
               dt = (b["t_ms"] - a["t_ms"]) / 1000
               hooks = rate * k * dt
-              for c in ("timeline", "usage", "spend", "status_tail"):
+              for c in ("hub", "timeline", "usage", "spend", "status_tail"):
                   d = {f: b["transcripts"][c][f] - a["transcripts"][c][f] for f in b["transcripts"][c]}
                   print(f"| {ph} | {rate} | {c} | {d['opens']/hooks:.2f} | {d['bytes_read']/hooks:.0f} | {d['bytes_scanned']/hooks:.0f} | {d['lines_parsed']/hooks:.2f} |")
               print(f"| {ph} | {rate} | window | {dt:.0f} s, about {hooks:.0f} hooks | | | |")
