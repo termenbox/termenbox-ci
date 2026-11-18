@@ -52,20 +52,6 @@ env:
   CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
-  # github.run_started_at is empty in a workflow called from a repository_dispatch run, so this job stamps a time before
-  # the image is built; the digest check refuses an image created earlier.
-  start:
-    name: Start
-    if: inputs.publish
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    outputs:
-      at: ${{ steps.at.outputs.at }}
-    steps:
-      - id: at
-        shell: bash
-        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
   build:
     name: Build (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -206,7 +192,6 @@ jobs:
   # digests of the finished tag once; a dry run builds and pushes no image.
   docker:
     name: Image
-    needs: [start]
     if: inputs.publish
     permissions:
       contents: read
@@ -224,7 +209,7 @@ jobs:
   # registry login. The manifest job needs this one, so a failed image build leaves it skipped and nothing is published.
   image:
     name: Image digests
-    needs: [start, build, docker]
+    needs: [build, docker]
     if: inputs.publish
     environment: ${{ inputs.channel }}
     runs-on: ubuntu-latest
@@ -253,9 +238,9 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           SHA: ${{ inputs.sha }}
-          RUN_STARTED: ${{ needs.start.outputs.at }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          python3 "$TB_RELEASE_TOOLS/image_digests.py" "ghcr.io/termenbox/termenbox:${VERSION}" image-digests.json --commit "$SHA" --run-start "$RUN_STARTED"
+          python3 "$TB_RELEASE_TOOLS/image_digests.py" "ghcr.io/termenbox/termenbox:${VERSION}" image-digests.json --commit "$SHA" --run-id "$RUN_ID"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-image

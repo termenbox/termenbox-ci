@@ -219,7 +219,9 @@ jobs:
           build-args: |
             TERMENBOX_BUILD=${{ needs.plan.outputs.sha }}
             TERMENBOX_RELEASE_VERSION=${{ needs.plan.outputs.version }}
-          labels: org.opencontainers.image.revision=${{ needs.plan.outputs.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ needs.plan.outputs.sha }}
+            dev.termenbox.release.run=${{ github.run_id }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ env.PUSH }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-cache:${{ needs.plan.outputs.channel || 'nightly' }}-${{ matrix.arch }}
           cache-to: ${{ env.PUSH == 'true' && format('type=registry,ref={0}/{1}-cache:{2}-{3},mode=max', env.REGISTRY, env.IMAGE_NAME, needs.plan.outputs.channel || 'nightly', matrix.arch) || '' }}

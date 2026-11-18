@@ -36,35 +36,41 @@ class ImageDigests(unittest.TestCase):
 
 
 SHA = "1" * 40
-START = "2026-11-07T10:00:00Z"
 
 
-def config(revision=SHA, created="2026-11-07T10:20:00Z"):
-    return {"created": created, "config": {"Labels": {"org.opencontainers.image.revision": revision}}}
+RUN_ID = "4242"
+
+
+def config(revision=SHA, run=RUN_ID):
+    labels = {"org.opencontainers.image.revision": revision}
+    if run is not None:
+        labels["dev.termenbox.release.run"] = run
+    return {"created": "2026-11-07T10:20:00Z", "config": {"Labels": labels}}
 
 
 class ImageDigestMustComeFromThisRunsBuild(unittest.TestCase):
-    def test_an_image_of_this_commit_made_after_the_run_started_is_accepted(self):
-        self.assertIsNone(image_problem(config(), SHA, START))
+    def test_an_image_of_this_commit_and_this_run_is_accepted_whatever_its_creation_time(self):
+        self.assertIsNone(image_problem(config(), SHA, RUN_ID))
+        old = config()
+        old["created"] = "2020-01-01T00:00:00Z"
+        self.assertIsNone(image_problem(old, SHA, RUN_ID))
 
-    def test_an_image_made_before_the_run_started_is_refused(self):
-        self.assertIn("before", image_problem(config(created="2026-11-07T09:59:59Z"), SHA, START))
+    def test_an_image_of_another_run_or_without_the_run_label_is_refused(self):
+        self.assertIn("run", image_problem(config(run="1"), SHA, RUN_ID))
+        self.assertIn("run", image_problem(config(run=None), SHA, RUN_ID))
+        self.assertIn("run", image_problem(config(), SHA, ""))
 
     def test_an_image_of_another_commit_or_without_the_label_is_refused(self):
-        self.assertIn("revision", image_problem(config(revision="2" * 40), SHA, START))
-        self.assertIn("revision", image_problem({"created": "2026-11-07T10:20:00Z", "config": {}}, SHA, START))
-
-    def test_an_unreadable_creation_time_is_refused(self):
-        self.assertIsNotNone(image_problem(config(created=""), SHA, START))
-        self.assertIsNotNone(image_problem(config(created="yesterday"), SHA, START))
+        self.assertIn("revision", image_problem(config(revision="2" * 40), SHA, RUN_ID))
+        self.assertIn("revision", image_problem({"created": "2026-11-07T10:20:00Z", "config": {}}, SHA, RUN_ID))
 
     def test_image_digest_must_come_from_this_runs_build(self):
         """A tag pre-seeded with another image makes the release job fail and writes no digests."""
         index = {"manifests": [entry("amd64", A), entry("arm64", B)]}
-        seeded = config(revision="2" * 40, created="2026-11-06T00:00:00Z")
+        seeded = config(run="1")
         with tempfile.TemporaryDirectory() as d:
             out = os.path.join(d, "digests.json")
-            argv = ["x", "ghcr.io/o/i:1.2.3", out, "--commit", SHA, "--run-start", START]
+            argv = ["x", "ghcr.io/o/i:1.2.3", out, "--commit", SHA, "--run-id", RUN_ID]
             with mock.patch.object(image_digests, "inspect", return_value=index), \
                     mock.patch.object(image_digests, "image_config", return_value=seeded):
                 with self.assertRaises(SystemExit) as raised:
@@ -79,7 +85,7 @@ class ImageDigestMustComeFromThisRunsBuild(unittest.TestCase):
     def test_a_tag_that_is_not_there_yet_is_refused_at_once(self):
         with mock.patch.object(image_digests, "inspect", side_effect=ValueError("manifest unknown")):
             with self.assertRaises(SystemExit) as raised:
-                image_digests.main(["x", "ghcr.io/o/i:1.2.3", "/nonexistent/out.json", "--commit", SHA, "--run-start", START])
+                image_digests.main(["x", "ghcr.io/o/i:1.2.3", "/nonexistent/out.json", "--commit", SHA, "--run-id", RUN_ID])
         self.assertIn("manifest unknown", str(raised.exception))
 
 
