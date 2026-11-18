@@ -515,7 +515,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y tmux
 
       - name: Run tests
-        run: cargo test --workspace
+        run: |
+          set +e
+          timeout 1500 cargo test --workspace --no-fail-fast > /tmp/rust-test.log 2>&1
+          rc=$?
+          grep -E 'Running |running for over|FAILED|panicked' /tmp/rust-test.log | tail -80
+          exit $rc
         env:
           # The container updater's test uses the runner's Docker and a local registry.
           TERMENBOX_E2E_DOCKER: "1"
