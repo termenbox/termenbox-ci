@@ -89,6 +89,20 @@ jobs:
             i=$((i + 1))
           done
           echo "exit=0" >> "$GITHUB_OUTPUT"
+      # The tmux the owner runs is the pinned static build of the release, not the runner's apt tmux:
+      # take the one ci.yaml saved (same key as release-build.yaml) and build it only when it is not there.
+      - name: Restore the pinned tmux built by CI
+        id: tmux
+        if: inputs.mode == 'attach'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tmux-out
+          key: tmux-x86_64-${{ hashFiles('src/.github/scripts/build-tmux.sh') }}
+      - name: Build the pinned tmux (pinned sources, static)
+        if: inputs.mode == 'attach' && steps.tmux.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y -qq bison >/dev/null 2>&1
+          (cd src && .github/scripts/build-tmux.sh ../tmux-out) > tmux-build.log 2>&1 || { tail -5 tmux-build.log; exit 1; }
       - name: Attach bench (ref B; output withheld except the table)
         id: attach
         if: inputs.mode == 'attach'
@@ -96,9 +110,8 @@ jobs:
           ROUNDS: ${{ inputs.rounds }}
         run: |
           set +e
-          sudo apt-get update -qq >/dev/null 2>&1
-          sudo apt-get install -y -qq tmux >/dev/null 2>&1
-          echo "runner: $(nproc) cores, load $(cut -d' ' -f1-3 /proc/loadavg), $(tmux -V)"
+          export PATH="$PWD/tmux-out:$PATH"
+          echo "runner: $(nproc) cores, load $(cut -d' ' -f1-3 /proc/loadavg), $(command -v tmux) $(tmux -V)"
           (cd b && sh scripts/mux-attach-bench.sh --rounds "$ROUNDS" > ../attach.out 2> ../bench.err)
           echo "exit=$?" >> "$GITHUB_OUTPUT"
           grep -E '^(#|row |median )' attach.out | tee -a "$GITHUB_STEP_SUMMARY"
