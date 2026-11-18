@@ -26,6 +26,9 @@ on:
       rounds:
         description: Interleaved rounds
         default: '5'
+      mode:
+        description: load (daemon CPU and status latency, ref A against ref B) or attach (keystroke latency and flood cost of the daemon, tmux and a raw PTY, on ref B)
+        default: load
 
 permissions:
   contents: read
@@ -59,13 +62,14 @@ jobs:
           echo "checked out A=${REF_A} B=${REF_B}"
       - name: Build both daemons (output withheld)
         id: build
+        if: inputs.mode == 'load'
         run: |
           set +e
           { for v in a b; do (cd "$v" && cargo build --release -p termenbox-mux --target-dir "$PWD/../target-$v") || exit 1; done; } > build.log 2>&1
           echo "exit=$?" >> "$GITHUB_OUTPUT"
       - name: Run the load, interleaved
         id: bench
-        if: steps.build.outputs.exit == '0'
+        if: inputs.mode == 'load' && steps.build.outputs.exit == '0'
         env:
           PANES: ${{ inputs.panes }}
           NOISY: ${{ inputs.noisy }}
@@ -85,8 +89,21 @@ jobs:
             i=$((i + 1))
           done
           echo "exit=0" >> "$GITHUB_OUTPUT"
+      - name: Attach bench (ref B; output withheld except the table)
+        id: attach
+        if: inputs.mode == 'attach'
+        env:
+          ROUNDS: ${{ inputs.rounds }}
+        run: |
+          set +e
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -y -qq tmux >/dev/null 2>&1
+          echo "runner: $(nproc) cores, load $(cut -d' ' -f1-3 /proc/loadavg), $(tmux -V)"
+          (cd b && sh scripts/mux-attach-bench.sh --rounds "$ROUNDS" > ../attach.out 2> ../bench.err)
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          grep -E '^(#|row |median )' attach.out | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Medians
-        if: steps.bench.outputs.exit == '0'
+        if: inputs.mode == 'load' && steps.bench.outputs.exit == '0'
         run: |
           python3 - <<'P' | tee -a "$GITHUB_STEP_SUMMARY"
           import re, statistics as st
@@ -116,4 +133,10 @@ jobs:
           path: all.log.enc
           retention-days: 7
       - name: Result
-        run: test "${{ steps.build.outputs.exit }}" = 0 && test "${{ steps.bench.outputs.exit }}" = 0
+        env:
+          MODE: ${{ inputs.mode }}
+          BUILD: ${{ steps.build.outputs.exit }}
+          BENCH: ${{ steps.bench.outputs.exit }}
+          ATTACH: ${{ steps.attach.outputs.exit }}
+        run: |
+          if [ "$MODE" = attach ]; then test "$ATTACH" = 0; else test "$BUILD" = 0 && test "$BENCH" = 0; fi
