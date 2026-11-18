@@ -56,10 +56,12 @@ jobs:
           git -C src checkout --quiet --detach "$sha" >/dev/null 2>&1
           echo "checked out ${sha}"
       - name: Install tmux and perf
+        env:
+          PERF_ON: ${{ inputs.perf }}
         run: |
           sudo apt-get update -qq >/dev/null 2>&1
           sudo apt-get install -y -qq tmux >/dev/null 2>&1 || true
-          if [ "${{ inputs.perf }}" = true ]; then
+          if [ "$PERF_ON" = true ]; then
             sudo apt-get install -y -qq "linux-tools-$(uname -r)" >/dev/null 2>&1 \
               || sudo apt-get install -y -qq linux-tools-generic >/dev/null 2>&1 || true
           fi
