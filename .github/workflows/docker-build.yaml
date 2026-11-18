@@ -79,11 +79,11 @@ jobs:
       sha: ${{ steps.p.outputs.sha }}
       channel: ${{ steps.p.outputs.channel }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
-      - uses: termenbox/termenbox-ci/.github/actions/release-tools@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
       # The whole history: the security review gate below asks whether the commit is on master.
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -137,7 +137,7 @@ jobs:
       - name: Token for the review repo
         id: reviews
         if: steps.p.outputs.run == 'true' && (github.event.client_payload.event || github.event_name) != 'pull_request' && inputs.tags == ''
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           app-id: ${{ secrets.PUBLISHER_APP_ID }}
           app-key: ${{ secrets.PUBLISHER_APP_KEY }}
@@ -161,7 +161,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: plan-${{ strategy.job-index }}
@@ -194,9 +194,9 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -255,7 +255,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: build-${{ strategy.job-index }}
@@ -281,7 +281,7 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -310,7 +310,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: manifest-${{ strategy.job-index }}
@@ -348,7 +348,7 @@ jobs:
           fi
           echo "state=$state" >> "$GITHUB_OUTPUT"
           echo "desc=$desc" >> "$GITHUB_OUTPUT"
-      - uses: termenbox/termenbox-ci/.github/actions/post-status@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/post-status@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}

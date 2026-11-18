@@ -38,7 +38,7 @@ jobs:
     steps:
       - id: rt-gate
         name: Token for the next step (contents)
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
@@ -74,9 +74,9 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ (github.event.client_payload.sha || inputs.sha) }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -104,7 +104,7 @@ jobs:
       # the next change to ci.yaml bumps both container lines. The monthly sweep's ci-image-age fails a bump left 60 days.
       - id: rt-moved
         name: Token for the next step (issues)
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
@@ -133,7 +133,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: ci-${{ strategy.job-index }}
@@ -147,7 +147,7 @@ jobs:
           needs: ${{ toJSON(needs) }}
 
       - if: always()
-        uses: termenbox/termenbox-ci/.github/actions/post-status@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/post-status@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           app-id: ${{ secrets.REPORTER_APP_ID }}
           app-key: ${{ secrets.REPORTER_APP_KEY }}
