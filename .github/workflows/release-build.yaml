@@ -65,9 +65,9 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -176,7 +176,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: build-${{ strategy.job-index }}
@@ -220,10 +220,10 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
-      - uses: termenbox/termenbox-ci/.github/actions/release-tools@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -249,7 +249,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: image-${{ strategy.job-index }}
@@ -286,10 +286,10 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
-      - uses: termenbox/termenbox-ci/.github/actions/release-tools@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -333,7 +333,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: manifest-${{ strategy.job-index }}
@@ -364,8 +364,8 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
-      - uses: termenbox/termenbox-ci/.github/actions/release-tools@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -418,7 +418,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: sign-${{ strategy.job-index }}
@@ -446,9 +446,9 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -525,7 +525,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: verify-${{ strategy.job-index }}
@@ -554,8 +554,8 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
-      - uses: termenbox/termenbox-ci/.github/actions/release-tools@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -600,7 +600,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: sign-sums-${{ strategy.job-index }}
@@ -642,10 +642,10 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
-      - uses: termenbox/termenbox-ci/.github/actions/release-tools@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -673,7 +673,7 @@ jobs:
       # so the release has no --target and the notes name the commit.
       - name: Token for the public product repo
         id: publisher
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           app-id: ${{ secrets.PUBLISHER_APP_ID }}
           app-key: ${{ secrets.PUBLISHER_APP_KEY }}
@@ -727,7 +727,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: publish-${{ strategy.job-index }}
@@ -759,9 +759,9 @@ jobs:
     outputs:
       fail: ${{ steps.finish.outputs.summary }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -785,7 +785,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: build-client-${{ strategy.job-index }}
@@ -822,9 +822,9 @@ jobs:
       fail: ${{ steps.finish.outputs.summary }}
       staged: ${{ steps.staged.outputs.staged }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -848,7 +848,7 @@ jobs:
 
       - name: Token for the public product repo
         id: publisher
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           app-id: ${{ secrets.PUBLISHER_APP_ID }}
           app-key: ${{ secrets.PUBLISHER_APP_KEY }}
@@ -882,7 +882,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: deploy-${{ strategy.job-index }}

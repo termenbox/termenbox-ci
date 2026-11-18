@@ -54,10 +54,10 @@ jobs:
       docker_tags: ${{ steps.g.outputs.docker_tags }}
       publish: ${{ steps.g.outputs.publish }}
     steps:
-      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
-      - uses: termenbox/termenbox-ci/.github/actions/release-tools@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+      - uses: termenbox/termenbox-ci/.github/actions/release-tools@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
 
-      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           sha: ${{ github.event.client_payload.sha }}
           app-id: ${{ secrets.REPORTER_APP_ID }}
@@ -98,7 +98,7 @@ jobs:
       - name: Token for the review repo
         id: reviews
         if: steps.g.outputs.run == 'true'
-        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/app-token@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           app-id: ${{ secrets.PUBLISHER_APP_ID }}
           app-key: ${{ secrets.PUBLISHER_APP_KEY }}
@@ -131,7 +131,7 @@ jobs:
 
       - if: always()
         id: finish
-        uses: termenbox/termenbox-ci/.github/actions/finish@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
         with:
           key: ${{ secrets.LOG_KEY }}
           name: gate-${{ strategy.job-index }}
