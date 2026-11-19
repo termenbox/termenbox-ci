@@ -27,7 +27,7 @@ on:
         description: Interleaved rounds
         default: '5'
       mode:
-        description: load (daemon CPU and status latency, ref A against ref B) or attach (keystroke latency and flood cost of the daemon, tmux and a raw PTY, on ref B)
+        description: load (daemon CPU and status latency, ref A against ref B), attach (keystroke latency and flood cost of the daemon, tmux and a raw PTY, on ref B) or stage (cost of each stage of the daemon's output path, and perf/strace counts per typed key, on ref B)
         default: load
 
 permissions:
@@ -115,6 +115,18 @@ jobs:
           (cd b && sh scripts/mux-attach-bench.sh --rounds "$ROUNDS" > ../attach.out 2> ../bench.err)
           echo "exit=$?" >> "$GITHUB_OUTPUT"
           grep -E '^(#|row |median )' attach.out | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Stage bench and per-key profile (ref B; output withheld except the tables)
+        id: stage
+        if: inputs.mode == 'stage'
+        run: |
+          set +e
+          sudo apt-get install -y -qq linux-tools-common linux-tools-generic strace >/dev/null 2>&1
+          echo "runner: $(nproc) cores, load $(cut -d' ' -f1-3 /proc/loadavg)"
+          (cd b && sh scripts/mux-stage-bench.sh --mb 200 > ../stage.out 2> ../bench.err)
+          rc=$?
+          (cd b && OUT="$PWD/../profile" sh scripts/mux-stage-bench.sh --profile > ../profile.out 2>> ../bench.err)
+          echo "exit=$((rc + $?))" >> "$GITHUB_OUTPUT"
+          { echo '```'; cat stage.out profile.out; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Medians
         if: inputs.mode == 'load' && steps.bench.outputs.exit == '0'
         run: |
@@ -151,5 +163,6 @@ jobs:
           BUILD: ${{ steps.build.outputs.exit }}
           BENCH: ${{ steps.bench.outputs.exit }}
           ATTACH: ${{ steps.attach.outputs.exit }}
+          STAGE: ${{ steps.stage.outputs.exit }}
         run: |
-          if [ "$MODE" = attach ]; then test "$ATTACH" = 0; else test "$BUILD" = 0 && test "$BENCH" = 0; fi
+          if [ "$MODE" = attach ]; then test "$ATTACH" = 0; elif [ "$MODE" = stage ]; then test "$STAGE" = 0; else test "$BUILD" = 0 && test "$BENCH" = 0; fi
