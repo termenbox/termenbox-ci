@@ -210,6 +210,9 @@ jobs:
       - if: github.event.client_payload.event != 'push'
         uses: ./.github/actions/pnpm-restore
 
+      # The client imports the generated Tenon module (packages/tenon/pkg); this job holds no deploy credential, so the toolchain may run here.
+      - uses: ./.github/actions/tenon-wasm
+
       - run: pnpm install --frozen-lockfile
 
       - name: Check the installer script
@@ -573,6 +576,9 @@ jobs:
       - if: github.event.client_payload.event != 'push'
         uses: ./.github/actions/pnpm-restore
 
+      # The client imports the generated Tenon module (packages/tenon/pkg); this job holds no deploy credential, so the toolchain may run here.
+      - uses: ./.github/actions/tenon-wasm
+
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm --filter termenbox-client run e2e:build
@@ -737,6 +743,9 @@ jobs:
 
       - if: github.event.client_payload.event != 'push'
         uses: ./.github/actions/pnpm-restore
+
+      # The client imports the generated Tenon module (packages/tenon/pkg); this job holds no deploy credential, so the toolchain may run here.
+      - uses: ./.github/actions/tenon-wasm
 
       - run: pnpm install --frozen-lockfile
 
