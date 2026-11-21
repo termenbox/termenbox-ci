@@ -210,6 +210,11 @@ jobs:
       - if: github.event.client_payload.event != 'push'
         uses: ./.github/actions/pnpm-restore
 
+      # The client imports the generated Tenon module (packages/tenon/pkg) on the Tenon branches; this job holds no deploy credential,
+      # so the toolchain may run here. A ref without the action (develop and master until Tenon lands) skips it.
+      - if: hashFiles('.github/actions/tenon-wasm/action.yaml') != ''
+        uses: ./.github/actions/tenon-wasm
+
       - run: pnpm install --frozen-lockfile
 
       - name: Check the installer script
@@ -520,6 +525,16 @@ jobs:
           # The container updater's test uses the runner's Docker and a local registry.
           TERMENBOX_E2E_DOCKER: "1"
 
+      # The vendored engines are upstream plus the patch series in the repo: a hand edit of vendor/ or a lost patch fails here.
+      # The engine-agreement differential run (avt against the Tenon engine) is part of `cargo test --workspace` above.
+      # A ref without the scripts (develop and master until the vendored engines land) skips each check.
+      - name: Check the vendored Tenon engine matches its patch series
+        if: hashFiles('scripts/tenon-vendor.sh') != ''
+        run: bash scripts/tenon-vendor.sh check
+      - name: Check the vendored daemon engine matches its patch series
+        if: hashFiles('scripts/mux-vendor.sh') != ''
+        run: bash scripts/mux-vendor.sh check
+
       # The tests of the release scripts that moved to release/ run in this repository's repo-checks.
       - name: Test the bundle check, the deploy ref check and the pin check
         run: |
@@ -572,6 +587,11 @@ jobs:
 
       - if: github.event.client_payload.event != 'push'
         uses: ./.github/actions/pnpm-restore
+
+      # The client imports the generated Tenon module (packages/tenon/pkg) on the Tenon branches; this job holds no deploy credential,
+      # so the toolchain may run here. A ref without the action (develop and master until Tenon lands) skips it.
+      - if: hashFiles('.github/actions/tenon-wasm/action.yaml') != ''
+        uses: ./.github/actions/tenon-wasm
 
       - run: pnpm install --frozen-lockfile
 
@@ -737,6 +757,11 @@ jobs:
 
       - if: github.event.client_payload.event != 'push'
         uses: ./.github/actions/pnpm-restore
+
+      # The client imports the generated Tenon module (packages/tenon/pkg) on the Tenon branches; this job holds no deploy credential,
+      # so the toolchain may run here. A ref without the action (develop and master until Tenon lands) skips it.
+      - if: hashFiles('.github/actions/tenon-wasm/action.yaml') != ''
+        uses: ./.github/actions/tenon-wasm
 
       - run: pnpm install --frozen-lockfile
 
