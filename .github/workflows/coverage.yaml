@@ -1,0 +1,170 @@
+name: Coverage
+
+# A one-shot coverage measurement. It runs the
+# tests of each Rust crate under llvm-cov and of each JS package under its own runner, then prints ONE line per crate or
+# package. File and function names never reach the public log: per-file detail goes into an encrypted artifact. With
+# `ratchet` set it reads the baseline from the source repo (coverage-baseline.json) and fails
+# when a unit falls below it. Never add a pull_request trigger: a fork PR could change this file and print the checkout.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Source ref to measure
+        default: develop
+      ratchet:
+        description: Fail when a crate or package is below the recorded baseline
+        default: 'false'
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - id: rt-src
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@fda5883ce5ffd5a13831b5c1b14ba8ad6d46435d
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
+      - name: Check out the ref
+        env:
+          TOKEN: ${{ steps.rt-src.outputs.token }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set +x
+          git -c credential.helper= clone --quiet "https://x-access-token:${TOKEN}@github.com/termenbox/termenbox-source.git" src >/dev/null 2>&1
+          git -C src remote set-url origin https://github.com/termenbox/termenbox-source.git
+          git -C src checkout --quiet --detach "$(git -C src rev-parse --verify --quiet "origin/$REF" || git -C src rev-parse --verify "$REF")" || exit 1
+          echo "sha=$(git -C src rev-parse --short=12 HEAD)"
+      # Same pnpm and node as ci.yaml (the root package.json has no packageManager field).
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          version: 10
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Install tmux (end-to-end tests drive real sessions)
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Rust coverage per crate (output withheld)
+        id: rust
+        run: |
+          set +e
+          cd src
+          cargo install cargo-llvm-cov --locked --version 0.6.16 >/dev/null 2>&1
+          rustup component add llvm-tools-preview >/dev/null 2>&1
+          # label:package (the cargo package names differ from the labels in the table)
+          export TERMENBOX_E2E_DOCKER=1   # the container updater's test uses the runner's Docker, as in ci.yaml
+          for u in core:termenbox-core server:termenbox-server mux:termenbox-mux bridge-contract:bridge-contract agent:termenbox-agent; do
+            l=${u%%:*}; c=${u#*:}
+            # --no-fail-fast --ignore-run-fail: a red test still yields a number
+            cargo llvm-cov --no-fail-fast --ignore-run-fail --json --summary-only -p "$c" --output-path "../cov-$l.json" >> ../cov.log 2>&1
+            echo "$l exit=$?" >> ../cov-exit.txt
+          done
+      - name: JS coverage per package (output withheld)
+        id: js
+        run: |
+          set +e
+          cd src
+          pnpm install --frozen-lockfile >> ../cov.log 2>&1
+          # @vitest/coverage-v8 is added to the runner's copy only (version = the INSTALLED vitest); nothing is committed.
+          for p in client control; do
+            v=$(node -p "require('./packages/$p/node_modules/vitest/package.json').version")
+            pnpm --filter "termenbox-$p" add -D "@vitest/coverage-v8@$v" >> ../cov.log 2>&1
+            (cd "packages/$p" && npx vitest run --coverage --coverage.provider=v8 --coverage.reporter=json-summary --coverage.reportsDirectory="../../../cov-$p" --reporter=json --outputFile="../../../vitest-$p.json") >> ../cov.log 2>&1
+            echo "$p exit=$?" >> ../cov-exit.txt
+          done
+          (cd packages/readiness && node --test --experimental-test-coverage > ../../../cov-readiness.txt 2>&1)
+          echo "readiness exit=$?" >> ../cov-exit.txt
+      - name: Summary, one line per crate or package
+        id: sum
+        env:
+          RATCHET: ${{ inputs.ratchet }}
+        run: |
+          python3 - <<'P'
+          import json, os, re, sys
+          rows, fail = {}, 0
+          for c in ["core", "server", "mux", "bridge-contract", "agent"]:
+              try:
+                  t = json.load(open(f"cov-{c}.json"))["data"][0]["totals"]["lines"]
+                  rows[c] = (round(t["percent"], 1), t["covered"], t["count"])
+              except Exception:
+                  rows[c] = None
+          for p in ["client", "control"]:
+              try:
+                  t = json.load(open(f"cov-{p}/coverage-summary.json"))["total"]["lines"]
+                  rows[p] = (round(t["pct"], 1), t["covered"], t["total"])
+              except Exception:
+                  rows[p] = None
+          try:
+              m = re.search(r"all files\s*\|\s*([\d.]+)", open("cov-readiness.txt").read())
+              rows["readiness"] = (float(m.group(1)), None, None)
+          except Exception:
+              rows["readiness"] = None
+          base = {}
+          ratchet = os.environ.get("RATCHET") == "true"
+          if ratchet:
+              import subprocess
+              # the baseline comes from develop, never from the measured ref (a ref could lower its own baseline)
+              base = json.loads(subprocess.check_output(["git", "-C", "src", "show", "origin/develop:docs/plans/assets/revision/coverage-baseline.json"]))
+              for k in base:
+                  if k not in rows:
+                      print(f"baseline unit {k} was not measured")
+                      fail += 1
+          print("| unit | lines % | covered | total | baseline |")
+          print("|---|---|---|---|---|")
+          for k, v in rows.items():
+              b = base.get(k)
+              # with the ratchet on, a unit whose measurement failed (v is None) fails too
+              low = ratchet and b is not None and (v is None or v[0] + 0.05 < b)
+              fail += 1 if low else 0
+              print(f"| {k} | {v[0] if v else 'n/a'} | {v[1] if v else ''} | {v[2] if v else ''} | {b if b is not None else ''}{' LOW' if low else ''} |")
+          open(os.environ["GITHUB_OUTPUT"], "a").write(f"low={fail}\n")
+          P
+      # The passing-test list for scripts/spec-trace.sh --passed: one "<path>::<name>" per line (vitest: the file path
+      # relative to the repo, then "suite > case"). Test names are file and function names, so the list goes into the
+      # encrypted artifact only. Rust tests are not listed yet (phase0-gaps.md, P0-G2).
+      # The ci repo's gate, once the owner merges it: download and decrypt `coverage-detail-encrypted`, extract
+      # passed.txt, and run `SPEC_TRACE_PASSED=passed.txt sh scripts/land.sh <PR#>` or
+      # `sh scripts/spec-trace.sh --passed passed.txt` in a checkout of the PR head.
+      - name: Passing-test list (vitest packages)
+        if: always()
+        run: |
+          python3 - <<'P'
+          import json, os
+          out = []
+          for p in ["client", "control"]:
+              try:
+                  for f in json.load(open(f"vitest-{p}.json"))["testResults"]:
+                      rel = os.path.relpath(f["name"], os.path.abspath("src"))
+                      for a in f["assertionResults"]:
+                          if a["status"] == "passed":
+                              out.append(rel + "::" + " > ".join(a["ancestorTitles"] + [a["title"]]))
+              except Exception:
+                  pass
+          open("passed.txt", "w").write("\n".join(out) + "\n")
+          P
+      - name: Encrypt the per-file detail
+        if: always()
+        env:
+          LOG_KEY: ${{ secrets.LOG_KEY }}
+        run: |
+          touch cov.log
+          tar cf all.tar cov.log cov-exit.txt cov-*.json cov-client cov-control cov-readiness.txt passed.txt 2>/dev/null
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:LOG_KEY -in all.tar -out all.tar.enc 2>/dev/null || true
+          rm -rf all.tar cov.log cov-* vitest-*.json passed.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: coverage-detail-encrypted
+          path: all.tar.enc
+          retention-days: 14
+      - name: Result
+        if: always()
+        env:
+          LOW: ${{ steps.sum.outputs.low }}
+        run: |
+          [ "${LOW:-0}" = 0 ] || { echo "ratchet: $LOW unit(s) below the baseline"; exit 1; }
