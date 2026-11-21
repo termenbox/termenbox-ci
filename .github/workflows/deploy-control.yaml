@@ -49,14 +49,19 @@ jobs:
         working-directory: packages/control
         run: |
           # `d1 info` fails when the database is missing: create it, then read its id (an identifier, not a secret).
-          npx --yes "$WRANGLER" d1 info termenbox-control --json >/dev/null 2>&1 || npx --yes "$WRANGLER" d1 create termenbox-control >/dev/null 2>&1 || { echo "d1 create failed"; exit 1; }
+          # A failure prints wrangler's error lines with ids masked, nothing else.
+          why() { grep -iE 'error|✘|code:|authenticat|permission|account|not found|already' | grep -v WARNING | sed -E 's/[0-9a-f]{32}/<id>/g' | head -6 | cut -c1-200; }
+          if ! out=$(npx --yes "$WRANGLER" d1 info termenbox-control --json 2>&1); then
+            echo "d1 info: not there yet"; printf '%s\n' "$out" | why
+            out=$(npx --yes "$WRANGLER" d1 create termenbox-control 2>&1) || { echo "d1 create failed"; printf '%s\n' "$out" | why; exit 1; }
+          fi
           id=$(npx --yes "$WRANGLER" d1 info termenbox-control --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.uuid||j.id||"")})')
           case "$id" in ????????-????-????-????-????????????) ;; *) echo "no database id"; exit 1;; esac
           sed -i "s/SET-BY-THE-DEPLOY-WORKFLOW/$id/" wrangler.toml
           grep -q SET-BY-THE-DEPLOY-WORKFLOW wrangler.toml && { echo "the id was not substituted"; exit 1; }
           # The schema is written with IF NOT EXISTS: running it again changes nothing.
-          npx --yes "$WRANGLER" d1 execute termenbox-control --remote --file schema.sql >/dev/null 2>&1 || { echo "schema failed"; exit 1; }
-          npx --yes "$WRANGLER" r2 bucket create termenbox-control --jurisdiction eu >/dev/null 2>&1 || true
+          out=$(npx --yes "$WRANGLER" d1 execute termenbox-control --remote --file schema.sql 2>&1) || { echo "schema failed"; printf '%s\n' "$out" | why; exit 1; }
+          out=$(npx --yes "$WRANGLER" r2 bucket create termenbox-control --jurisdiction eu 2>&1) || { echo "bucket: not created (it may exist)"; printf '%s\n' "$out" | why; }
           echo "database and bucket ready"
       - name: Deploy
         id: deploy
