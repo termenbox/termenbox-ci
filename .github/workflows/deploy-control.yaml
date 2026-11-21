@@ -2,8 +2,10 @@ name: Deploy control plane
 run-name: "Deploy control plane · ${{ inputs.sha || 'head of develop' }}"
 # Deploys the organisation control plane Worker (packages/control of the source) to the owner's Cloudflare account.
 # The job sits in the `cloud` environment, whose required reviewer is the owner: nothing runs until they approve. The Worker's
-# signing secret (POLICY_SIGNER) is put in by the owner with `wrangler secret put`; this workflow never reads or sets it.
-# Only status lines are printed, never wrangler's raw output.
+# signing secret (POLICY_SIGNER) belongs to the owner: when the Worker has none, this workflow makes a temporary key, puts it in
+# as the secret through stdin and prints only its public half. The owner replaces it with their own `wrangler secret put
+# POLICY_SIGNER` before any server is claimed: a box that already trusts the temporary key accepts a new one only inside a
+# policy the old key signed. Only status lines are printed, never wrangler's raw output.
 on:
   workflow_dispatch:
     inputs:
@@ -65,6 +67,15 @@ jobs:
           [ -n "$url" ] || { echo "no address in the deploy output"; exit 1; }
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "control plane: $url"
+      - name: Policy signing key
+        working-directory: packages/control
+        run: |
+          if npx --yes "$WRANGLER" secret list 2>/dev/null | grep -q '"POLICY_SIGNER"'; then echo "signing key: already set"; exit 0; fi
+          key=$(openssl genpkey -algorithm ed25519 -outform DER | base64 -w0)
+          printf '%s' "$key" | npx --yes "$WRANGLER" secret put POLICY_SIGNER >/dev/null 2>&1 || { echo "secret POLICY_SIGNER failed"; exit 1; }
+          pub=$(printf '%s' "$key" | base64 -d | openssl pkey -inform DER -pubout -outform DER | tail -c 32 | base64 -w0)
+          echo "signing key: temporary, public half $pub"
+          echo "replace it with your own before claiming a server"
       - name: Health
         run: |
           sleep 5
