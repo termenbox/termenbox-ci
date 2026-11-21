@@ -523,6 +523,13 @@ jobs:
           # The container updater's test uses the runner's Docker and a local registry.
           TERMENBOX_E2E_DOCKER: "1"
 
+      # The vendored engines are upstream plus the patch series in the repo: a hand edit of vendor/ or a lost patch fails here.
+      # The engine-agreement differential run (avt against the Tenon engine) is part of `cargo test --workspace` above.
+      - name: Check the vendored engines match their patch series
+        run: |
+          bash scripts/tenon-vendor.sh check
+          bash scripts/mux-vendor.sh check
+
       # The tests of the release scripts that moved to release/ run in this repository's repo-checks.
       - name: Test the bundle check, the deploy ref check and the pin check
         run: |
