@@ -1,0 +1,165 @@
+name: Tenon browser bench
+
+# A one-shot harness for the Tenon client in a browser, on a quiet runner. It builds the wasm core, the release server and the
+# client(s) of one source ref, then runs one of two probes, interleaving the builds run by run (xterm, tenon, xterm, tenon ...) so a
+# difference between them is not the difference between two minutes of a shared machine:
+#   variant frames          profile.mjs --frames: per-frame time split (feed, snapshot and damage, GPU upload, draw), main-thread busy
+#                           fraction at 1x and 4x CPU throttle on the generated flood, JS heap and wasm memory after it
+#   variant none|tmux|daemon the echo probe of parity/daemon.mjs: a typed line's echo in a quiet daemon tab while another tab floods
+#                           (a tmux or a daemon tab, or none), the clock starting at Enter; pages 2 gives the flooding tab its own browser
+# Only the `row` lines reach the log; every build output goes to a file that is uploaded encrypted. Never add a pull_request trigger:
+# a fork PR could change this file and print the checkout.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Source ref to measure (a branch, tag or sha of termenbox-source)
+        default: feat/tenon-cutover
+      build:
+        description: Client build (xterm, tenon or both)
+        type: choice
+        options: [both, tenon, xterm]
+        default: both
+      variant:
+        description: frames (the per-frame meters) or the echo probe with no flood, a tmux flood or a daemon flood
+        type: choice
+        options: [frames, daemon, tmux, none]
+        default: frames
+      runs:
+        description: Runs per build, interleaved
+        default: '5'
+      pages:
+        description: Echo probe only, 1 (one browser process) or 2 (the flooding tab in its own process)
+        type: choice
+        options: ['1', '2']
+        default: '1'
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - id: rt-src
+        name: Token for the next step (contents)
+        uses: termenbox/termenbox-ci/.github/actions/app-token@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+        with:
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          permissions: '{"contents":"read"}'
+      - name: Check out the ref
+        env:
+          TOKEN: ${{ steps.rt-src.outputs.token }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set +x
+          git -c credential.helper= clone --quiet "https://x-access-token:${TOKEN}@github.com/termenbox/termenbox-source.git" src >/dev/null 2>&1
+          git -C src remote set-url origin https://github.com/termenbox/termenbox-source.git
+          sha=$(git -C src rev-parse --verify --quiet "origin/$REF" || git -C src rev-parse --verify --quiet "$REF") || { echo "no such ref"; exit 1; }
+          git -C src checkout --quiet --detach "$sha" >/dev/null 2>&1 || { echo "checkout failed"; exit 1; }
+          echo "checked out ${REF} ($(printf '%.8s' "$sha"))"
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          version: 9
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: src
+          shared-key: tenon-browser-bench
+          cache-bin: 'true'
+      # wasm-pack as the dev container pins it (docker/Dockerfile.dev).
+      - name: Install wasm-pack
+        run: command -v wasm-pack >/dev/null && wasm-pack --version | grep -q '0\.15\.1' || cargo install wasm-pack --version 0.15.1 --locked
+      # The tmux the owner runs is the pinned static build of the release (see Mux bench): take the one ci.yaml saved.
+      - name: Restore the pinned tmux built by CI
+        id: tmux
+        if: inputs.variant != 'frames'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tmux-out
+          key: tmux-x86_64-${{ hashFiles('src/.github/scripts/build-tmux.sh') }}
+      - name: Build the pinned tmux (pinned sources, static)
+        if: inputs.variant != 'frames' && steps.tmux.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y -qq bison >/dev/null 2>&1
+          (cd src && .github/scripts/build-tmux.sh ../tmux-out) > tmux-build.log 2>&1 || { tail -5 tmux-build.log; exit 1; }
+      - name: Build the wasm core, the server and the client(s) (output withheld)
+        id: build
+        env:
+          BUILD: ${{ inputs.build }}
+          VARIANT: ${{ inputs.variant }}
+        run: |
+          set +e
+          (
+            cd src
+            pnpm install --frozen-lockfile || exit 1
+            wasm-pack build packages/tenon --target web --release || exit 1
+            if [ "$VARIANT" != frames ]; then cargo build --release -p termenbox-server || exit 1; fi
+            cd packages/client
+            if [ "$BUILD" != tenon ]; then pnpm run build || exit 1; fi
+            if [ "$BUILD" != xterm ]; then VITE_TENON=1 VITE_OUT_DIR=dist-tenon npx vite build || exit 1; fi
+          ) > build.log 2>&1
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+      - name: Run the probe, interleaved (output withheld except the rows)
+        id: bench
+        if: steps.build.outputs.exit == '0'
+        env:
+          BUILD: ${{ inputs.build }}
+          VARIANT: ${{ inputs.variant }}
+          RUNS: ${{ inputs.runs }}
+          PAGES: ${{ inputs.pages }}
+        run: |
+          set +e
+          export PATH="$PWD/tmux-out:$PATH"
+          builds="xterm tenon"; [ "$BUILD" != both ] && builds="$BUILD"
+          echo "runner: $(nproc) cores, load $(cut -d' ' -f1-3 /proc/loadavg), $(google-chrome --version 2>/dev/null)"
+          cd src/packages/client
+          : > ../../../rows.txt
+          rc=0
+          i=1
+          while [ "$i" -le "$RUNS" ]; do
+            for b in $builds; do
+              if [ "$VARIANT" = frames ]; then
+                PROFILE_ALLOW_BROWSER=1 node e2e/tenon/profile.mjs --frames --build "$b" --runs 1 > ../../../one.out 2>> ../../../bench.err || rc=1
+              else
+                TENON_ECHO_PROBE=1 ECHO_VARIANT="$VARIANT" ECHO_RUNS=1 ECHO_PAGES="$PAGES" TERMENBOX_BIN="$PWD/../../target/release/termenbox-server" \
+                  node e2e/tenon/parity.mjs --build "$b" --only "echo probe" > ../../../one.out 2>> ../../../bench.err || rc=1
+              fi
+              grep '^row ' ../../../one.out | sed "s/ run=[0-9]* / run=$i /" | tee -a ../../../rows.txt
+              pkill -x termenbox-server; pkill -x tmux
+            done
+            i=$((i + 1))
+          done
+          [ -s ../../../rows.txt ] || rc=1
+          grep -q 'error=' ../../../rows.txt && rc=1
+          echo "exit=$rc" >> "$GITHUB_OUTPUT"
+          { echo '```'; cat ../../../rows.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Encrypt logs
+        if: always()
+        env:
+          LOG_KEY: ${{ secrets.LOG_KEY }}
+        run: |
+          touch build.log bench.err
+          cat build.log bench.err > all.log
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:LOG_KEY -in all.log -out all.log.enc 2>/dev/null || true
+          rm -f build.log bench.err all.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: tenon-browser-bench-log-encrypted
+          path: all.log.enc
+          retention-days: 7
+      - name: Result
+        env:
+          BUILD: ${{ steps.build.outputs.exit }}
+          BENCH: ${{ steps.bench.outputs.exit }}
+        run: test "$BUILD" = 0 && test "$BENCH" = 0
