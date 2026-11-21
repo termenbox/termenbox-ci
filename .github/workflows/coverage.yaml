@@ -62,8 +62,8 @@ jobs:
           export TERMENBOX_E2E_DOCKER=1   # the container updater's test uses the runner's Docker, as in ci.yaml
           for u in core:termenbox-core server:termenbox-server mux:termenbox-mux bridge-contract:bridge-contract agent:termenbox-agent; do
             l=${u%%:*}; c=${u#*:}
-            # --no-fail-fast --ignore-run-fail: a red test still yields a number
-            cargo llvm-cov --no-fail-fast --ignore-run-fail --json --summary-only -p "$c" --output-path "../cov-$l.json" >> ../cov.log 2>&1
+            # --ignore-run-fail alone: a red test still yields a number (cargo-llvm-cov rejects it together with --no-fail-fast; run 44920045586)
+            cargo llvm-cov --ignore-run-fail --json --summary-only -p "$c" --output-path "../cov-$l.json" >> ../cov.log 2>&1
             echo "$l exit=$?" >> ../cov-exit.txt
           done
       - name: JS coverage per package (output withheld)
