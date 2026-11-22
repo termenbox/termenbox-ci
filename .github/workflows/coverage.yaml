@@ -54,7 +54,7 @@ jobs:
         run: |
           set +e
           cd src
-          cargo install cargo-llvm-cov --locked --version 0.6.16 >/dev/null 2>&1
+          cargo install cargo-llvm-cov --locked --version 0.9.1 >/dev/null 2>&1
           echo "install-llvm-cov exit=$?" >> ../cov-exit.txt
           rustup component add llvm-tools-preview >/dev/null 2>&1
           echo "llvm-tools exit=$?" >> ../cov-exit.txt
@@ -63,7 +63,12 @@ jobs:
           for u in core:termenbox-core server:termenbox-server mux:termenbox-mux bridge-contract:bridge-contract agent:termenbox-agent; do
             l=${u%%:*}; c=${u#*:}
             # --ignore-run-fail alone: a red test still yields a number (cargo-llvm-cov rejects it together with --no-fail-fast; run 44920045586)
-            cargo llvm-cov --ignore-run-fail --json --summary-only -p "$c" --output-path "../cov-$l.json" >> ../cov.log 2>&1
+            # 0.9.1: 0.6.16 does not find the test binaries in cargo's new build-dir layout ("not found object files", run 44922368959)
+            cargo llvm-cov --ignore-run-fail --no-report -p "$c" >> ../cov.log 2>&1
+            # a test that kills a child mid-write leaves a truncated profile file, which fails the whole merge: drop those
+            pd="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/llvm-profdata"
+            for f in target/llvm-cov-target/*.profraw; do [ -e "$f" ] && ! "$pd" show "$f" >/dev/null 2>&1 && rm -f "$f"; done
+            cargo llvm-cov report --json --summary-only -p "$c" --output-path "../cov-$l.json" >> ../cov.log 2>&1
             echo "$l exit=$?" >> ../cov-exit.txt
           done
       - name: JS coverage per package (output withheld)
