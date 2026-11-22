@@ -27,7 +27,7 @@ on:
         description: Interleaved rounds
         default: '5'
       mode:
-        description: load (daemon CPU and status latency, ref A against ref B), attach (keystroke latency and flood cost of the daemon, tmux and a raw PTY, on ref B) or stage (cost of each stage of the daemon's output path, and perf/strace counts per typed key, on ref B) or pair (plan step 6.3: the whole path, termenbox-server plus the daemon against termenbox-server plus the pinned tmux, 25 to 500 panes, idle and with a third working, one and two servers, on ref B)
+        description: load (daemon CPU and status latency, ref A against ref B), attach (keystroke latency and flood cost of the daemon, tmux and a raw PTY, on ref B) or stage (cost of each stage of the daemon's output path, and perf/strace counts per typed key, on ref B) or pair (plan step 6.3, the whole path, termenbox-server plus the daemon against termenbox-server plus the pinned tmux, 25 to 500 panes, idle and with a third working, one and two servers, on ref B)
         default: load
 
 permissions:
