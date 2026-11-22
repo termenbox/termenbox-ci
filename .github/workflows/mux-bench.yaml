@@ -26,6 +26,9 @@ on:
       rounds:
         description: Interleaved rounds
         default: '5'
+      servers:
+        description: Pair mode only, servers run side by side (a list such as 1,2)
+        default: '1'
       mode:
         description: load (daemon CPU and status latency, ref A against ref B), attach (keystroke latency and flood cost of the daemon, tmux and a raw PTY, on ref B) or stage (cost of each stage of the daemon's output path, and perf/strace counts per typed key, on ref B) or pair (plan step 6.3, the whole path, termenbox-server plus the daemon against termenbox-server plus the pinned tmux, 25 to 500 panes, idle and with a third working, one and two servers, on ref B)
         default: load
@@ -115,20 +118,26 @@ jobs:
           (cd b && sh scripts/mux-attach-bench.sh --rounds "$ROUNDS" > ../attach.out 2> ../bench.err)
           echo "exit=$?" >> "$GITHUB_OUTPUT"
           grep -E '^(#|row |median )' attach.out | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Pair bench (ref B; output withheld except the table)
+      - name: Pair bench (ref B; table in the next step)
         id: pair
         if: inputs.mode == 'pair'
         env:
           ROUNDS: ${{ inputs.rounds }}
           SECONDS_EACH: ${{ inputs.seconds }}
+          PANES: ${{ inputs.panes }}
+          SERVERS: ${{ inputs.servers }}
         run: |
           set +e
           export PATH="$PWD/tmux-out:$PATH"
           echo "runner: $(nproc) cores, load $(cut -d' ' -f1-3 /proc/loadavg), $(command -v tmux) $(tmux -V)"
-          (cd b && cargo build --release -p termenbox-server) > build.log 2>&1 || { echo "exit=1" >> "$GITHUB_OUTPUT"; exit 0; }
-          SERVERBIN="$PWD/b/target/release/termenbox-server" python3 b/scripts/mux-pair-bench.py --rounds "$ROUNDS" --seconds "$SECONDS_EACH" > pair.out 2> bench.err
+          : > pair.out; : > bench.err
+          (cd b && timeout 20m cargo build --release -p termenbox-server) > build.log 2>&1 || { echo "exit=1" >> "$GITHUB_OUTPUT"; exit 0; }
+          SERVERBIN="$PWD/b/target/release/termenbox-server" timeout 25m python3 b/scripts/mux-pair-bench.py --panes "$PANES" --servers "$SERVERS" --rounds "$ROUNDS" --seconds "$SECONDS_EACH" > pair.out 2> bench.err
           echo "exit=$?" >> "$GITHUB_OUTPUT"
-          { echo '```'; grep -E '^(#|row |median |verdict)' pair.out; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Pair table and the tail of the script's stderr
+        if: always() && inputs.mode == 'pair'
+        run: |
+          { echo '```'; grep -E '^(#|row |fail |median |verdict)' pair.out; echo '--- tail of bench.err'; tail -40 bench.err; echo '--- tail of build.log'; tail -5 build.log; echo '```'; } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Stage bench and per-key profile (ref B; output withheld except the tables)
         id: stage
         if: inputs.mode == 'stage'
