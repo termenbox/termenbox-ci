@@ -13,7 +13,7 @@ on:
         default: develop
       ratchet:
         description: Fail when a crate or package is below the recorded baseline
-        default: 'false'
+        default: 'true'
 
 permissions:
   contents: read
