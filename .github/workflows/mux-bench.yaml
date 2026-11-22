@@ -27,7 +27,7 @@ on:
         description: Interleaved rounds
         default: '5'
       mode:
-        description: load (daemon CPU and status latency, ref A against ref B), attach (keystroke latency and flood cost of the daemon, tmux and a raw PTY, on ref B) or stage (cost of each stage of the daemon's output path, and perf/strace counts per typed key, on ref B)
+        description: load (daemon CPU and status latency, ref A against ref B), attach (keystroke latency and flood cost of the daemon, tmux and a raw PTY, on ref B) or stage (cost of each stage of the daemon's output path, and perf/strace counts per typed key, on ref B) or pair (plan step 6.3: the whole path, termenbox-server plus the daemon against termenbox-server plus the pinned tmux, 25 to 500 panes, idle and with a third working, one and two servers, on ref B)
         default: load
 
 permissions:
@@ -36,7 +36,7 @@ permissions:
 jobs:
   bench:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 150
     steps:
       - id: rt-src
         name: Token for the next step (contents)
@@ -93,13 +93,13 @@ jobs:
       # take the one ci.yaml saved (same key as release-build.yaml) and build it only when it is not there.
       - name: Restore the pinned tmux built by CI
         id: tmux
-        if: inputs.mode == 'attach'
+        if: inputs.mode == 'attach' || inputs.mode == 'pair'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: tmux-out
           key: tmux-x86_64-${{ hashFiles('src/.github/scripts/build-tmux.sh') }}
       - name: Build the pinned tmux (pinned sources, static)
-        if: inputs.mode == 'attach' && steps.tmux.outputs.cache-hit != 'true'
+        if: (inputs.mode == 'attach' || inputs.mode == 'pair') && steps.tmux.outputs.cache-hit != 'true'
         run: |
           sudo apt-get install -y -qq bison >/dev/null 2>&1
           (cd src && .github/scripts/build-tmux.sh ../tmux-out) > tmux-build.log 2>&1 || { tail -5 tmux-build.log; exit 1; }
@@ -115,6 +115,20 @@ jobs:
           (cd b && sh scripts/mux-attach-bench.sh --rounds "$ROUNDS" > ../attach.out 2> ../bench.err)
           echo "exit=$?" >> "$GITHUB_OUTPUT"
           grep -E '^(#|row |median )' attach.out | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Pair bench (ref B; output withheld except the table)
+        id: pair
+        if: inputs.mode == 'pair'
+        env:
+          ROUNDS: ${{ inputs.rounds }}
+          SECONDS_EACH: ${{ inputs.seconds }}
+        run: |
+          set +e
+          export PATH="$PWD/tmux-out:$PATH"
+          echo "runner: $(nproc) cores, load $(cut -d' ' -f1-3 /proc/loadavg), $(command -v tmux) $(tmux -V)"
+          (cd b && cargo build --release -p termenbox-server) > build.log 2>&1 || { echo "exit=1" >> "$GITHUB_OUTPUT"; exit 0; }
+          SERVERBIN="$PWD/b/target/release/termenbox-server" python3 b/scripts/mux-pair-bench.py --rounds "$ROUNDS" --seconds "$SECONDS_EACH" > pair.out 2> bench.err
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          { echo '```'; grep -E '^(#|row |median |verdict)' pair.out; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Stage bench and per-key profile (ref B; output withheld except the tables)
         id: stage
         if: inputs.mode == 'stage'
@@ -165,5 +179,6 @@ jobs:
           BENCH: ${{ steps.bench.outputs.exit }}
           ATTACH: ${{ steps.attach.outputs.exit }}
           STAGE: ${{ steps.stage.outputs.exit }}
+          PAIR: ${{ steps.pair.outputs.exit }}
         run: |
-          if [ "$MODE" = attach ]; then test "$ATTACH" = 0; elif [ "$MODE" = stage ]; then test "$STAGE" = 0; else test "$BUILD" = 0 && test "$BENCH" = 0; fi
+          if [ "$MODE" = attach ]; then test "$ATTACH" = 0; elif [ "$MODE" = stage ]; then test "$STAGE" = 0; elif [ "$MODE" = pair ]; then test "$PAIR" = 0; else test "$BUILD" = 0 && test "$BENCH" = 0; fi
