@@ -48,14 +48,17 @@ jobs:
       - name: Database and bucket exist
         working-directory: packages/control
         run: |
-          # `d1 info` fails when the database is missing: create it, then read its id (an identifier, not a secret).
-          # A failure prints wrangler's error lines with ids masked, nothing else.
+          # wrangler's `d1 info <name>` reads the binding in wrangler.toml, whose id is still the placeholder, so it
+          # cannot find a database that exists. Look the database up by name through the API instead (an id is an
+          # identifier, not a secret). A failure prints wrangler's error lines with ids masked, nothing else.
           why() { grep -iE 'error|✘|code:|authenticat|permission|account|not found|already' | grep -v WARNING | sed -E 's/[0-9a-f]{32}/<id>/g' | head -6 | cut -c1-200; }
-          if ! out=$(npx --yes "$WRANGLER" d1 info termenbox-control --json 2>&1); then
-            echo "d1 info: not there yet"; printf '%s\n' "$out" | why
+          lookup() { curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database?name=termenbox-control" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=(JSON.parse(s).result||[]).find(d=>d.name==="termenbox-control");console.log(r?r.uuid:"")})'; }
+          id=$(lookup) || { echo "database lookup failed"; exit 1; }
+          if [ -z "$id" ]; then
+            echo "database: not there yet, creating"
             out=$(npx --yes "$WRANGLER" d1 create termenbox-control 2>&1) || { echo "d1 create failed"; printf '%s\n' "$out" | why; exit 1; }
+            id=$(lookup) || { echo "database lookup failed"; exit 1; }
           fi
-          id=$(npx --yes "$WRANGLER" d1 info termenbox-control --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.uuid||j.id||"")})')
           case "$id" in ????????-????-????-????-????????????) ;; *) echo "no database id"; exit 1;; esac
           sed -i "s/SET-BY-THE-DEPLOY-WORKFLOW/$id/" wrangler.toml
           grep -q SET-BY-THE-DEPLOY-WORKFLOW wrangler.toml && { echo "the id was not substituted"; exit 1; }
