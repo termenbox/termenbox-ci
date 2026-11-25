@@ -203,6 +203,16 @@ jobs:
           echo "## valgrind --tool=none is not a counter; lackey for instruction count"
           valgrind --tool=lackey ./w 2000000 2>&1 | tail -8
           echo "exit=0" >> "$GITHUB_OUTPUT"
+      - name: Instruction counts of the read paths (ref B; counts only)
+        id: icount
+        if: inputs.mode == 'icount'
+        run: |
+          set +e
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -y -qq valgrind >/dev/null 2>&1
+          (cd b && sh scripts/icount.sh > ../icount.out 2> ../bench.err)
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          { echo '```'; cat icount.out; echo '--- tail of bench.err'; tail -20 bench.err; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Medians
         if: inputs.mode == 'load' && steps.bench.outputs.exit == '0'
         run: |
@@ -242,5 +252,6 @@ jobs:
           STAGE: ${{ steps.stage.outputs.exit }}
           PAIR: ${{ steps.pair.outputs.exit }}
           PROBE: ${{ steps.probe.outputs.exit }}
+          ICOUNT: ${{ steps.icount.outputs.exit }}
         run: |
-          if [ "$MODE" = probe ]; then test "$PROBE" = 0; elif [ "$MODE" = attach ]; then test "$ATTACH" = 0; elif [ "$MODE" = stage ]; then test "$STAGE" = 0; elif [ "$MODE" = pair ]; then test "$PAIR" = 0; else test "$BUILD" = 0 && test "$BENCH" = 0; fi
+          if [ "$MODE" = icount ]; then test "$ICOUNT" = 0; elif [ "$MODE" = probe ]; then test "$PROBE" = 0; elif [ "$MODE" = attach ]; then test "$ATTACH" = 0; elif [ "$MODE" = stage ]; then test "$STAGE" = 0; elif [ "$MODE" = pair ]; then test "$PAIR" = 0; else test "$BUILD" = 0 && test "$BENCH" = 0; fi
