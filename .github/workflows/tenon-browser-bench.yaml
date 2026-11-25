@@ -80,29 +80,17 @@ jobs:
       - name: Install wasm-pack
         run: command -v wasm-pack >/dev/null && wasm-pack --version | grep -q '0\.15\.1' || cargo install wasm-pack --version 0.15.1 --locked
       # The tmux the owner runs is the pinned static build of the release (see Mux bench): take the one ci.yaml saved.
-      - name: Fetch the pinned tmux (public release of the ci repo, no cache)
+      - name: Restore the pinned tmux built by CI
         id: tmux
         if: inputs.variant != 'frames'
-        run: |
-          set +e
-          tag="tmux-$(sha256sum src/.github/scripts/build-tmux.sh | cut -c1-16)"
-          base="https://github.com/termenbox/termenbox-ci/releases/download/$tag"
-          mkdir -p tmux-out
-          if curl -fsSL --retry 3 -o tmux-out/SHA256SUMS "$base/SHA256SUMS" \
-            && curl -fsSL --retry 3 -o tmux-out/tmux-x86_64-linux "$base/tmux-x86_64-linux" \
-            && (cd tmux-out && sha256sum -c --ignore-missing SHA256SUMS >/dev/null); then
-            mv tmux-out/tmux-x86_64-linux tmux-out/tmux && chmod +x tmux-out/tmux
-            echo "fetched=true" >> "$GITHUB_OUTPUT"
-            echo "pinned tmux $tag fetched"
-          else
-            rm -rf tmux-out
-            echo "fetched=false" >> "$GITHUB_OUTPUT"
-            echo "no release $tag (or a bad checksum): building the pinned tmux"
-          fi
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tmux-out
+          key: tmux-x86_64-${{ hashFiles('src/.github/scripts/build-tmux.sh') }}
       - name: Build the pinned tmux (pinned sources, static)
-        if: inputs.variant != 'frames' && steps.tmux.outputs.fetched != 'true'
+        if: inputs.variant != 'frames' && steps.tmux.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get install -y -qq bison >/dev/null 2>&1
+          sudo apt-get install -y -qq bison musl-tools >/dev/null 2>&1
           (cd src && .github/scripts/build-tmux.sh ../tmux-out) > tmux-build.log 2>&1 || { tail -5 tmux-build.log; exit 1; }
       - name: Build the wasm core, the server and the client(s) (output withheld)
         id: build
