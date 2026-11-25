@@ -32,6 +32,9 @@ on:
       diag:
         description: Pair mode only, true runs the diagnosis (25 panes, a third working, noisy panes named claude and plain, and with perf on the server) instead of the table
         default: 'false'
+      ab:
+        description: Pair mode only, true builds ref A and ref B and runs both in this job (A, B and A again as the noise control), the table is B/A against the A/A floor
+        default: 'false'
       mode:
         description: load (daemon CPU and status latency, ref A against ref B), attach (keystroke latency and flood cost of the daemon, tmux and a raw PTY, on ref B) or stage (cost of each stage of the daemon's output path, and perf/strace counts per typed key, on ref B) or pair (plan step 6.3, the whole path, termenbox-server plus the daemon against termenbox-server plus the pinned tmux, 25 to 500 panes, idle and with a third working, one and two servers, on ref B)
         default: load
@@ -130,10 +133,16 @@ jobs:
           PANES: ${{ inputs.panes }}
           SERVERS: ${{ inputs.servers }}
           DIAG: ${{ inputs.diag }}
+          AB: ${{ inputs.ab }}
         run: |
           set +e
           export PATH="$PWD/tmux-out:$PATH"
           EXTRA=""
+          if [ "$AB" = true ]; then
+            (cd a && CARGO_PROFILE_RELEASE_STRIP=false timeout 20m cargo build --release -p termenbox-server) > build-a.log 2>&1 || { echo "exit=1" >> "$GITHUB_OUTPUT"; exit 0; }
+            export SERVERBIN_A="$PWD/a/target/release/termenbox-server"
+            EXTRA="--ab"
+          fi
           if [ "$DIAG" = true ]; then
             sudo apt-get install -y -qq linux-tools-common linux-tools-generic >/dev/null 2>&1
             sudo sysctl -q -w kernel.perf_event_paranoid=-1
