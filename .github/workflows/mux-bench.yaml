@@ -170,6 +170,36 @@ jobs:
           (cd b && OUT="$PWD/../profile" sh scripts/mux-stage-bench.sh --profile > ../profile.out 2>> ../bench.err)
           echo "exit=$((rc + $?))" >> "$GITHUB_OUTPUT"
           { echo '```'; cat stage.out profile.out; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Probe the instruction counters (a fixed C workload; counts only)
+        id: probe
+        if: inputs.mode == 'probe'
+        run: |
+          set +e
+          sudo apt-get install -y -qq linux-tools-common linux-tools-generic valgrind >/dev/null 2>&1
+          sudo sysctl -q -w kernel.perf_event_paranoid=-1
+          cat > w.c <<'C'
+          #include <stdlib.h>
+          #include <string.h>
+          #include <stdio.h>
+          int main(int c, char **v) {
+            long n = c > 1 ? atol(v[1]) : 200000000L; unsigned long x = 88172645463325252UL, s = 0;
+            char *m = malloc(64 << 20); memset(m, 1, 64 << 20);
+            for (long i = 0; i < n; i++) { x ^= x << 13; x ^= x >> 7; x ^= x << 17; s += m[(x >> 8) & ((64 << 20) - 1)]; }
+            printf("%lu\n", s); return 0; }
+          C
+          gcc -O1 -o w w.c
+          echo "kernel $(uname -r), $(nproc) cores, perf $(perf --version 2>&1 | head -1)"
+          echo "## perf stat, 5 runs of the same work (instructions:u, cycles:u, task-clock ms)"
+          for i in 1 2 3 4 5; do perf stat -x, -e instructions:u,cycles:u,task-clock ./w 2>&1 >/dev/null | tr '\n' ' '; echo; done
+          echo "## perf stat under a second busy process (does a neighbour move the count)"
+          (while :; do :; done) & B=$!
+          for i in 1 2 3; do perf stat -x, -e instructions:u,cycles:u ./w 2>&1 >/dev/null | tr '\n' ' '; echo; done
+          kill $B
+          echo "## valgrind callgrind, 3 runs of 1/10 of the work"
+          for i in 1 2 3; do valgrind --tool=callgrind --callgrind-out-file=/dev/null ./w 20000000 2>&1 | grep -E 'Collected|refs' | tr '\n' ' '; echo; done
+          echo "## valgrind --tool=none is not a counter; lackey for instruction count"
+          valgrind --tool=lackey ./w 2000000 2>&1 | grep -E 'guest instrs|total' | head -3
+          echo "exit=0" >> "$GITHUB_OUTPUT"
       - name: Medians
         if: inputs.mode == 'load' && steps.bench.outputs.exit == '0'
         run: |
@@ -208,5 +238,6 @@ jobs:
           ATTACH: ${{ steps.attach.outputs.exit }}
           STAGE: ${{ steps.stage.outputs.exit }}
           PAIR: ${{ steps.pair.outputs.exit }}
+          PROBE: ${{ steps.probe.outputs.exit }}
         run: |
-          if [ "$MODE" = attach ]; then test "$ATTACH" = 0; elif [ "$MODE" = stage ]; then test "$STAGE" = 0; elif [ "$MODE" = pair ]; then test "$PAIR" = 0; else test "$BUILD" = 0 && test "$BENCH" = 0; fi
+          if [ "$MODE" = probe ]; then test "$PROBE" = 0; elif [ "$MODE" = attach ]; then test "$ATTACH" = 0; elif [ "$MODE" = stage ]; then test "$STAGE" = 0; elif [ "$MODE" = pair ]; then test "$PAIR" = 0; else test "$BUILD" = 0 && test "$BENCH" = 0; fi
