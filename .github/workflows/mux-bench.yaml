@@ -175,8 +175,9 @@ jobs:
         if: inputs.mode == 'probe'
         run: |
           set +e
-          sudo apt-get install -y -qq linux-tools-common linux-tools-generic valgrind >/dev/null 2>&1
+          sudo apt-get install -y -qq linux-tools-common linux-tools-generic valgrind 2>&1 | tail -3
           sudo sysctl -q -w kernel.perf_event_paranoid=-1
+          command -v valgrind || echo 'valgrind: not installed'
           cat > w.c <<'C'
           #include <stdlib.h>
           #include <string.h>
@@ -198,7 +199,7 @@ jobs:
           echo "## valgrind callgrind, 3 runs of 1/10 of the work"
           for i in 1 2 3; do valgrind --tool=callgrind --callgrind-out-file=/dev/null ./w 20000000 2>&1 | grep -E 'Collected|refs' | tr '\n' ' '; echo; done
           echo "## valgrind --tool=none is not a counter; lackey for instruction count"
-          valgrind --tool=lackey ./w 2000000 2>&1 | grep -E 'guest instrs|total' | head -3
+          valgrind --tool=lackey ./w 2000000 2>&1 | tail -8
           echo "exit=0" >> "$GITHUB_OUTPUT"
       - name: Medians
         if: inputs.mode == 'load' && steps.bench.outputs.exit == '0'
