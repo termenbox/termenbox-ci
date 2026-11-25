@@ -20,8 +20,8 @@ import sys
 
 NUM = r"(0|[1-9]\d*)"
 CORE = rf"{NUM}\.{NUM}\.{NUM}"
-STABLE = re.compile(rf"^v({CORE})$")
-BETA = re.compile(rf"^v({CORE})-((?:rc|beta)\.{NUM})$")
+STABLE = re.compile(rf"^v({CORE})\Z")
+BETA = re.compile(rf"^v({CORE})-((?:rc|beta)\.{NUM})\Z")
 SEMVER = re.compile(rf"^{CORE}(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
 
@@ -82,29 +82,41 @@ def thaws(candidate, manifest_path):
     return manifest.get("freeze") is not True or newer(candidate, manifest["version"])
 
 
-def next_patch(tags):
-    """The version a cut build gets (decision 0282): the highest stable `X.Y.N` tag, plus one. Only exact stable tags
-    count (decision 0133); no stable tag at all is an error, since the cut has no line to continue."""
+def next_patch(tags, crate):
+    """The version a cut build gets (decision 0282): the highest `N` among every tag of the `X.Y` line of the crate
+    (stable or beta, exact patterns only, decision 0133), plus one. A number a halted build spent is never reused, so a
+    beta tag counts. A line with no tag yet starts at the crate's own patch."""
+    c = re.fullmatch(CORE, crate)
+    if not c:
+        sys.exit(f"the crate version {crate!r} is not X.Y.Z")
+    major, minor, patch = (int(x) for x in crate.split("."))
     best = None
     for tag in tags:
-        if STABLE.match(tag):
-            k = key(tag[1:])[0]
-            best = k if best is None or k > best else best
+        m = STABLE.match(tag) or BETA.match(tag)
+        if m:
+            v = key(m.group(1))[0]
+            if v[:2] == (major, minor):
+                best = v[2] if best is None or v[2] > best else best
     if best is None:
-        sys.exit("no stable tag to take the next patch from")
-    return f"{best[0]}.{best[1]}.{best[2] + 1}"
+        print(f"no tag on the {major}.{minor} line: starting at the crate's patch", file=sys.stderr)
+        return f"{major}.{minor}.{patch}"
+    return f"{major}.{minor}.{max(best + 1, patch)}"
 
 
 def core_ok(tag, crate, cut=False):
-    """A hand-made stable tag equals the crate version, as before. A tag the cut job made (`cut`, a field of the
-    dispatch payload that a pushed tag cannot carry) may have a higher patch: major and minor must match."""
+    """A hand-made stable tag equals the crate version, as before. A tag the cut job made (`cut`) is `vX.Y.N` or
+    `vX.Y.N-beta.K`, with the crate's major and minor and a patch at or above the crate's. The caller derives `cut`
+    from the workflow that runs (github.workflow_ref is the cut workflow), never from a payload field or from the tag
+    itself, so a pushed tag cannot claim it."""
     m = STABLE.match(tag)
+    if not m and cut and (b := BETA.match(tag)) and "-beta." in tag:
+        m = b
     c = re.fullmatch(CORE, crate)
     if not m or not c:
         return False
     if not cut:
         return tag[1:] == crate
-    t = tag[1:].split(".")
+    t = m.group(1).split(".")
     cv = crate.split(".")
     return t[:2] == cv[:2] and int(t[2]) >= int(cv[2])
 
@@ -121,7 +133,7 @@ def main(argv):
     elif len(argv) == 4 and argv[1] == "thaws":
         return 0 if thaws(argv[2], argv[3]) else 1
     elif len(argv) >= 3 and argv[1] == "next-patch":
-        print(next_patch(argv[2:]))
+        print(next_patch(argv[3:], argv[2]))
     elif len(argv) in (4, 5) and argv[1] == "core-ok":
         if len(argv) == 5 and argv[4] not in ("cut", "hand"):
             sys.exit("core-ok's last word is cut or hand")

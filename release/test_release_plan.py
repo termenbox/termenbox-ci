@@ -75,9 +75,27 @@ class CutTags(unittest.TestCase):
         self.assertFalse(rp.core_ok("v0.2.1", "0.2.2", cut=True))
         self.assertFalse(rp.core_ok("v0.2.5-rc.1", "0.2.2", cut=True))
 
-    def test_the_next_patch_follows_the_highest_stable_tag_only(self):
-        tags = ["v0.2.9", "v0.2.10", "v0.2.11-beta.1", "v2026.11.06-nightly", "latest", "v0.1.99"]
-        self.assertEqual(rp.next_patch(tags), "0.2.11")
+    def test_the_next_patch_counts_a_spent_beta_number_of_the_crate_line(self):
+        tags = ["v0.2.9", "v0.2.10", "v0.2.11-beta.1", "v2026.11.06-nightly", "latest", "v0.1.99", "v0.3.40"]
+        self.assertEqual(rp.next_patch(tags, "0.2.2"), "0.2.12")
+
+    def test_a_new_line_starts_at_the_crate_patch_and_says_so(self):
+        self.assertEqual(rp.next_patch(["v0.2.9"], "0.3.0"), "0.3.0")
+        self.assertEqual(rp.next_patch([], "0.3.0"), "0.3.0")
+
+    def test_a_cut_tag_may_be_the_beta_shape_and_a_pushed_tag_cannot_claim_cut(self):
+        self.assertTrue(rp.core_ok("v0.2.5-beta.1", "0.2.2", cut=True))
+        self.assertFalse(rp.core_ok("v0.2.5-beta.1", "0.2.2"))
+        self.assertFalse(rp.core_ok("v0.3.5-beta.1", "0.2.2", cut=True))
+
+    def test_a_trailing_newline_is_not_a_tag(self):
+        self.assertFalse(rp.core_ok("v0.2.5\n", "0.2.2", cut=True))
+        self.assertIsNone(rp.STABLE.match("v0.2.5\n"))
+
+    def test_the_core_ok_command_words(self):
+        self.assertEqual(rp.main(["rp", "core-ok", "v0.2.5", "0.2.2", "cut"]), 0)
+        self.assertEqual(rp.main(["rp", "core-ok", "v0.2.5", "0.2.2", "hand"]), 1)
+        self.assertEqual(rp.main(["rp", "core-ok", "v0.2.5", "0.2.2"]), 1)
 
 
 class Freeze(unittest.TestCase):

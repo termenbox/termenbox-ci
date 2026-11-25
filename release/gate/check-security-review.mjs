@@ -88,8 +88,8 @@ export function evaluateDetailed({ counts, edgeGlobs, commit, today, git }) {
   }
   // Decision 0282 and 2.8: the gate runs before the cut moves master, so the candidate is not on master yet. Master must be
   // an ancestor of the candidate (a fast-forward is possible) and the candidate must be on develop.
-  if (!git.isAncestor('origin/master', commit)) issues.push('origin/master is not an ancestor of the release commit: master cannot fast-forward to it');
-  if (!git.isAncestor(commit, 'origin/develop')) issues.push('the release commit is not on origin/develop');
+  if (!git.isAncestor('refs/remotes/origin/master', commit)) issues.push('origin/master is not an ancestor of the release commit: master cannot fast-forward to it');
+  if (!git.isAncestor(commit, 'refs/remotes/origin/develop')) issues.push('the release commit is not on origin/develop');
   if (counts.reviewed_commit === null) issues.push('no reviewed commit');
   else if (!git.isAncestor(counts.reviewed_commit, commit)) issues.push('the reviewed commit is not an ancestor of the release commit');
   else {
@@ -170,7 +170,7 @@ export function pathsOfNameStatus(output) {
 export function countsStep(dir, env = process.env, run = spawnSync) {
   const script = join(dir, 'check-security-counts.mjs');
   if (!existsSync(script)) return { ok: false, note: 'check-security-counts.mjs is not installed next to the gate: the counts cannot be checked, so the release is refused' };
-  const res = run('node', [script], { env, stdio: 'inherit' });
+  const res = run(process.execPath, [script], { env, stdio: 'inherit' });
   return res.status === 0 ? { ok: true, note: null } : { ok: false, note: 'check-security-counts.mjs refused the release' };
 }
 
