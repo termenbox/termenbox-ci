@@ -60,6 +60,26 @@ class Order(unittest.TestCase):
         self.assertFalse(rp.newer("0.2.0-rc.3", "0.2.0"))
 
 
+class CutTags(unittest.TestCase):
+    def test_a_cut_tag_with_a_higher_patch_passes(self):
+        self.assertTrue(rp.core_ok("v0.2.5", "0.2.2", cut=True))
+        self.assertTrue(rp.core_ok("v0.2.2", "0.2.2", cut=True))
+
+    def test_a_hand_tag_with_another_patch_fails_as_before(self):
+        self.assertFalse(rp.core_ok("v0.2.5", "0.2.2"))
+        self.assertFalse(rp.core_ok("v0.2.1", "0.2.2"))
+        self.assertTrue(rp.core_ok("v0.2.2", "0.2.2"))
+
+    def test_a_cut_tag_with_another_minor_or_a_lower_patch_fails(self):
+        self.assertFalse(rp.core_ok("v0.3.5", "0.2.2", cut=True))
+        self.assertFalse(rp.core_ok("v0.2.1", "0.2.2", cut=True))
+        self.assertFalse(rp.core_ok("v0.2.5-rc.1", "0.2.2", cut=True))
+
+    def test_the_next_patch_follows_the_highest_stable_tag_only(self):
+        tags = ["v0.2.9", "v0.2.10", "v0.2.11-beta.1", "v2026.11.06-nightly", "latest", "v0.1.99"]
+        self.assertEqual(rp.next_patch(tags), "0.2.11")
+
+
 class Freeze(unittest.TestCase):
     def manifest(self, version, freeze):
         import json, tempfile

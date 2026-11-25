@@ -5,6 +5,9 @@ and the alias releases, because GitHub tag globs are not regexes: `v[0-9]*.[0-9]
 usage: release_plan.py tag TAG                    classify a pushed tag; prints JSON, channel `none` for any other tag
        release_plan.py nightly CORE YYYYMMDD [N]  the Nth nightly of a day (default 1), CORE is the version in Cargo.toml
        release_plan.py newer CANDIDATE CURRENT    exit 0 when CANDIDATE is the newer SemVer (build metadata ignored)
+       release_plan.py next-patch TAG...          the next patch after the highest stable tag, as X.Y.N
+       release_plan.py core-ok TAG CRATE [cut|hand]  exit 0 when the tag's core fits the crate version: equal for a
+                                                  hand-made tag, same major.minor and patch >= crate's for `cut`
        release_plan.py thaws CANDIDATE MANIFEST   exit 0 when MANIFEST (a channel's published manifest.json) is not a
                                                   freeze, or CANDIDATE is newer than it; exit 1 while the freeze holds
 
@@ -79,6 +82,33 @@ def thaws(candidate, manifest_path):
     return manifest.get("freeze") is not True or newer(candidate, manifest["version"])
 
 
+def next_patch(tags):
+    """The version a cut build gets (decision 0282): the highest stable `X.Y.N` tag, plus one. Only exact stable tags
+    count (decision 0133); no stable tag at all is an error, since the cut has no line to continue."""
+    best = None
+    for tag in tags:
+        if STABLE.match(tag):
+            k = key(tag[1:])[0]
+            best = k if best is None or k > best else best
+    if best is None:
+        sys.exit("no stable tag to take the next patch from")
+    return f"{best[0]}.{best[1]}.{best[2] + 1}"
+
+
+def core_ok(tag, crate, cut=False):
+    """A hand-made stable tag equals the crate version, as before. A tag the cut job made (`cut`, a field of the
+    dispatch payload that a pushed tag cannot carry) may have a higher patch: major and minor must match."""
+    m = STABLE.match(tag)
+    c = re.fullmatch(CORE, crate)
+    if not m or not c:
+        return False
+    if not cut:
+        return tag[1:] == crate
+    t = tag[1:].split(".")
+    cv = crate.split(".")
+    return t[:2] == cv[:2] and int(t[2]) >= int(cv[2])
+
+
 def main(argv):
     if len(argv) == 3 and argv[1] == "tag":
         print(json.dumps(from_tag(argv[2])))
@@ -90,6 +120,12 @@ def main(argv):
         return 0 if newer(argv[2], argv[3]) else 1
     elif len(argv) == 4 and argv[1] == "thaws":
         return 0 if thaws(argv[2], argv[3]) else 1
+    elif len(argv) >= 3 and argv[1] == "next-patch":
+        print(next_patch(argv[2:]))
+    elif len(argv) in (4, 5) and argv[1] == "core-ok":
+        if len(argv) == 5 and argv[4] not in ("cut", "hand"):
+            sys.exit("core-ok's last word is cut or hand")
+        return 0 if core_ok(argv[2], argv[3], len(argv) == 5 and argv[4] == "cut") else 1
     else:
         sys.exit(__doc__)
     return 0
