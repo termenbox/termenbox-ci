@@ -22,9 +22,10 @@ for (const f of readdirSync(new URL("../sweep/", import.meta.url)).filter((n) =>
     if (INTERNAL.test(line)) { console.log(`sweep/${f}:${i + 1}: names something internal`); bad++; }
   });
 }
-for (const f of readdirSync(tools)) {
-  if (f === "__pycache__") continue;
-  readFileSync(new URL(f, tools), "utf8").split("\n").forEach((line, i) => {
+const walk = (u, rel = "") => readdirSync(u, { withFileTypes: true }).flatMap((e) =>
+  e.name === "__pycache__" ? [] : e.isDirectory() ? walk(new URL(`${e.name}/`, u), `${rel}${e.name}/`) : [[`${rel}${e.name}`, new URL(e.name, u)]]);
+for (const [f, url] of walk(tools)) {
+  readFileSync(url, "utf8").split("\n").forEach((line, i) => {
     if (INTERNAL.test(line)) { console.log(`release/${f}:${i + 1}: names something internal`); bad++; }
   });
 }

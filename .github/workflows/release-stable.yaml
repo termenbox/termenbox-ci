@@ -97,7 +97,8 @@ jobs:
           crate="$(grep -m1 '^version' packages/server/Cargo.toml | cut -d'"' -f2)"
           version="$(jq -r .version <<<"$plan")"
           if [ "$publish" = true ]; then
-            [ "$version" = "$crate" ] || { echo "tag $tag does not match packages/server/Cargo.toml version $crate"; exit 1; }
+            # A hand-pushed tag equals the crate; only a run the cut job dispatches may carry a higher patch.
+            python3 "$TB_RELEASE_TOOLS/release_plan.py" core-ok "$tag" "$crate" hand || { echo "tag $tag does not match packages/server/Cargo.toml version $crate"; exit 1; }
             git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/master || { echo "$tag is not on master (decision 0129): a stable release comes only from master"; exit 1; }
             # What is released is what CI built and tested (the nightly asks the same of its commit).
             green="$(gh api "repos/termenbox/termenbox-source/commits/$(git rev-parse HEAD)/status" --jq '[.statuses[]|select(.context=="ci" and .state=="success")]|length')"
