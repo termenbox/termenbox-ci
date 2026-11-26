@@ -1,0 +1,106 @@
+name: Zoom probe
+
+# A one-shot measurement, no source checkout and no secrets: one synthetic scrolling list inside a root that is zoomed two ways, CSS
+# `zoom` on the root and a scale variable on the sizes. For each browser engine it prints `row` lines saying whether the numbers a
+# script reads (getBoundingClientRect, offsetTop, scrollTop, scrollIntoView, elementFromPoint) stay in one unit, and whether a
+# Ctrl+wheel reaches a non-passive handler that can cancel it. A screenshot of each run is uploaded to look at the text by eye.
+# Playwright's engines are current builds, not the oldest supported release of each browser: the mobile rows only change the
+# viewport, touch and pixel ratio, and say so in their label. Never add a pull_request trigger.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { engine: chromium, device: '' }
+          - { engine: firefox, device: '' }
+          - { engine: webkit, device: '' }
+          - { engine: chromium, device: 'Pixel 7' }
+          - { engine: webkit, device: 'iPhone 13' }
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Install Playwright
+        run: |
+          mkdir probe && cd probe
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.49.1 >/dev/null
+          npx playwright install --with-deps ${{ matrix.engine }} >/dev/null
+      - name: Write the probe
+        run: |
+          cat > probe/zoom.mjs <<'JS'
+          import { chromium, firefox, webkit, devices } from "playwright";
+          const engines = { chromium, firefox, webkit };
+          const [engine, device] = [process.env.ENGINE, process.env.DEVICE];
+          const Z = 1.5, ROW = 40;
+          const html = (mode) => `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
+          <style>
+            body{margin:0;font:16px sans-serif}
+            #view{${mode === "zoom" ? `zoom:${Z}` : `--z:${Z}`};height:600px}
+            #sc{height:${mode === "zoom" ? 400 : 400 * Z}px;overflow:auto}
+            .r{height:${mode === "zoom" ? ROW : `calc(${ROW}px * var(--z))`};font-size:${mode === "zoom" ? 16 : `calc(16px * var(--z))`};box-sizing:border-box;border-bottom:1px solid #888}
+          </style>
+          <div id=view><div id=sc>${Array.from({ length: 100 }, (_, i) => `<div class=r id=r${i}>line ${i} the quick brown fox</div>`).join("")}</div></div>
+          <script>window.hits=[];document.getElementById("view").addEventListener("wheel",e=>{hits.push({ctrl:e.ctrlKey,meta:e.metaKey,dy:e.deltaY});if(e.ctrlKey||e.metaKey)e.preventDefault()},{passive:false})</script>`;
+          const browser = await engines[engine].launch();
+          const ctx = await browser.newContext(device ? { ...devices[device] } : { viewport: { width: 1000, height: 800 }, deviceScaleFactor: 2 });
+          const label = `${engine}${device ? ` (${device}, current build)` : ""}`;
+          for (const mode of ["zoom", "var"]) {
+            const page = await ctx.newPage();
+            await page.setContent(html(mode));
+            const m = await page.evaluate(({ Z, ROW }) => {
+              const sc = document.getElementById("sc"), r = (i) => document.getElementById("r" + i);
+              const out = {};
+              out.rowRectH = r(3).getBoundingClientRect().height;
+              out.scClientH = sc.clientHeight; out.scRectH = sc.getBoundingClientRect().height;
+              out.scrollHeight = sc.scrollHeight;
+              sc.scrollTop = 1000; out.scrollTopReadback = sc.scrollTop;
+              out.rel30 = r(30).getBoundingClientRect().top - sc.getBoundingClientRect().top;
+              out.offsetTop30 = r(30).offsetTop;
+              r(50).scrollIntoView({ block: "start" });
+              out.landingErr = r(50).getBoundingClientRect().top - sc.getBoundingClientRect().top;
+              const b = r(60).getBoundingClientRect();
+              out.hitOk = document.elementFromPoint(b.left + 10, b.top + b.height / 2) === r(60) || r(60).contains(document.elementFromPoint(b.left + 10, b.top + b.height / 2));
+              out.dpr = devicePixelRatio; out.vv = visualViewport ? visualViewport.scale : null;
+              return out;
+            }, { Z, ROW });
+            // one unit: a row is ROW*Z tall in viewport pixels, a restored scrollTop reads back what was set, and a scrollIntoView lands on the edge
+            const rowPx = ROW * Z;
+            m.oneUnit = Math.abs(m.rowRectH - rowPx) < 1 && Math.abs(m.scrollTopReadback - 1000) < 1.5 && Math.abs(m.landingErr) < 2 && m.hitOk;
+            // the unit of offsetTop against the unit of the rect: the pair a reading-place keeper subtracts
+            m.offsetVsRectRatio = +(m.rel30 / (m.offsetTop30 - 1000 === 0 ? 1 : (m.offsetTop30 - m.scrollTopReadback))).toFixed(3);
+            await page.mouse.move(300, 200);
+            if (!device) {
+              await page.keyboard.down("Control");
+              await page.mouse.wheel(0, -120);
+              await page.keyboard.up("Control");
+              await page.mouse.wheel(0, 120);
+            }
+            m.wheel = await page.evaluate(() => ({ hits: hits.length, ctrlHits: hits.filter((h) => h.ctrl || h.meta).length, vv: visualViewport ? visualViewport.scale : null }));
+            await page.screenshot({ path: `shot-${engine}${device ? "-" + device.replace(/ /g, "") : ""}-${mode}.png` });
+            console.log("row " + JSON.stringify({ label, mode, ...m }));
+            await page.close();
+          }
+          await browser.close();
+          JS
+      - name: Run the probe
+        working-directory: probe
+        env:
+          ENGINE: ${{ matrix.engine }}
+          DEVICE: ${{ matrix.device }}
+        run: node zoom.mjs 2>&1 | tee out.txt; grep -c '^row ' out.txt | grep -qx 2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: zoom-${{ matrix.engine }}-${{ matrix.device == '' && 'desktop' || 'mobile' }}
+          path: probe/*.png
+          retention-days: 7
