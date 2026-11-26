@@ -34,6 +34,7 @@ jobs:
           mkdir probe && cd probe
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.49.1 >/dev/null
+          sudo apt-get update >/dev/null
           npx playwright install --with-deps ${{ matrix.engine }} >/dev/null
       - name: Write the probe
         run: |
@@ -47,7 +48,7 @@ jobs:
             body{margin:0;font:16px sans-serif}
             #view{${mode === "zoom" ? `zoom:${Z}` : `--z:${Z}`};height:600px}
             #sc{height:${mode === "zoom" ? 400 : 400 * Z}px;overflow:auto}
-            .r{height:${mode === "zoom" ? ROW : `calc(${ROW}px * var(--z))`};font-size:${mode === "zoom" ? 16 : `calc(16px * var(--z))`};box-sizing:border-box;border-bottom:1px solid #888}
+            .r{height:${mode === "zoom" ? ROW + "px" : `calc(${ROW}px * var(--z))`};font-size:${mode === "zoom" ? "16px" : `calc(16px * var(--z))`};box-sizing:border-box;border-bottom:1px solid #888}
           </style>
           <div id=view><div id=sc>${Array.from({ length: 100 }, (_, i) => `<div class=r id=r${i}>line ${i} the quick brown fox</div>`).join("")}</div></div>
           <script>window.hits=[];document.getElementById("view").addEventListener("wheel",e=>{hits.push({ctrl:e.ctrlKey,meta:e.metaKey,dy:e.deltaY});if(e.ctrlKey||e.metaKey)e.preventDefault()},{passive:false})</script>`;
@@ -68,8 +69,8 @@ jobs:
               out.offsetTop30 = r(30).offsetTop;
               r(50).scrollIntoView({ block: "start" });
               out.landingErr = r(50).getBoundingClientRect().top - sc.getBoundingClientRect().top;
-              const b = r(60).getBoundingClientRect();
-              out.hitOk = document.elementFromPoint(b.left + 10, b.top + b.height / 2) === r(60) || r(60).contains(document.elementFromPoint(b.left + 10, b.top + b.height / 2));
+              const b = r(52).getBoundingClientRect();
+              out.hitOk = document.elementFromPoint(b.left + 10, b.top + b.height / 2) === r(52) || r(52).contains(document.elementFromPoint(b.left + 10, b.top + b.height / 2));
               out.dpr = devicePixelRatio; out.vv = visualViewport ? visualViewport.scale : null;
               return out;
             }, { Z, ROW });
@@ -77,7 +78,7 @@ jobs:
             const rowPx = ROW * Z;
             m.oneUnit = Math.abs(m.rowRectH - rowPx) < 1 && Math.abs(m.scrollTopReadback - 1000) < 1.5 && Math.abs(m.landingErr) < 2 && m.hitOk;
             // the unit of offsetTop against the unit of the rect: the pair a reading-place keeper subtracts
-            m.offsetVsRectRatio = +(m.rel30 / (m.offsetTop30 - 1000 === 0 ? 1 : (m.offsetTop30 - m.scrollTopReadback))).toFixed(3);
+            m.offsetVsRectRatio = +(m.rel30 / (m.offsetTop30 - m.scrollTopReadback)).toFixed(3);
             await page.mouse.move(300, 200);
             if (!device) {
               await page.keyboard.down("Control");
