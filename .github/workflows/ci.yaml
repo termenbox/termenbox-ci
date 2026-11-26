@@ -1680,7 +1680,7 @@ jobs:
   ci:
     name: CI result
     if: ${{ always() }}
-    needs: [changes, security-surface, supply-chain, commit-ids, client, rust-lint, rust-build, rust-test, pages, e2e, browsers, browsers-real, static, e2e-static, tmux, installer, container-installer]
+    needs: [changes, security-surface, supply-chain, commit-ids, client, native, rust-lint, rust-build, rust-test, pages, e2e, browsers, browsers-real, static, e2e-static, tmux, installer, container-installer]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
