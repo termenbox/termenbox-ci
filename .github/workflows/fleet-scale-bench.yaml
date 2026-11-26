@@ -33,6 +33,9 @@ on:
       rounds:
         description: Interleaved rounds
         default: '3'
+      asks:
+        description: Percent of missions that need you (9 is the stress mix; 2 is the row the budgets are read on)
+        default: '9'
       profile:
         description: Run each size with a V8 CPU profile and a scroll pass; prints the profile, elements_by and scroll rows (round 1 only)
         type: boolean
@@ -88,6 +91,7 @@ jobs:
           SECONDS_PER_RUN: ${{ inputs.seconds }}
           ROUNDS: ${{ inputs.rounds }}
           PROFILE: ${{ inputs.profile }}
+          ASKS: ${{ inputs.asks }}
         run: |
           set +e
           echo "runner: $(nproc) cores, load $(cut -d' ' -f1-3 /proc/loadavg), $(google-chrome --version 2>/dev/null)"
@@ -100,10 +104,10 @@ jobs:
               for t in $(echo "$THROTTLE" | tr ',' ' '); do
                 # The profile run is its own run of the round-1 pass, so the plain rows of every round stay comparable.
                 if [ "$PROFILE" = true ] && [ "$i" -eq 1 ]; then
-                  node e2e/fleet-scale.mjs --missions "$m" --throttle "$t" --rate "$RATE" --per-change "$PER_CHANGE" --events "$EVENTS" --seconds "$SECONDS_PER_RUN" --profile --scroll > ../../../prof.out 2>> ../../../bench.err || rc=1
+                  node e2e/fleet-scale.mjs --missions "$m" --throttle "$t" --rate "$RATE" --per-change "$PER_CHANGE" --events "$EVENTS" --seconds "$SECONDS_PER_RUN" --asks "$ASKS" --profile --scroll > ../../../prof.out 2>> ../../../bench.err || rc=1
                   grep -E '^(\{|profile |elements_by )' ../../../prof.out | sed "s/^{/prof {\"missions\":$m,\"throttle\":$t,/;t;s/^/prof-line missions=$m throttle=$t /" | tee -a ../../../rows.txt
                 fi
-                node e2e/fleet-scale.mjs --missions "$m" --throttle "$t" --rate "$RATE" --per-change "$PER_CHANGE" --events "$EVENTS" --seconds "$SECONDS_PER_RUN" > ../../../one.out 2>> ../../../bench.err || rc=1
+                node e2e/fleet-scale.mjs --missions "$m" --throttle "$t" --rate "$RATE" --per-change "$PER_CHANGE" --events "$EVENTS" --seconds "$SECONDS_PER_RUN" --asks "$ASKS" > ../../../one.out 2>> ../../../bench.err || rc=1
                 grep '^{' ../../../one.out | sed "s/^{/{\"round\":$i,/" | sed 's/^/row /' | tee -a ../../../rows.txt
               done
             done
