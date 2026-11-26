@@ -107,7 +107,7 @@ jobs:
       - name: Build the pinned tmux (pinned sources, static)
         if: (inputs.mode == 'attach' || inputs.mode == 'pair') && steps.tmux.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get install -y -qq bison >/dev/null 2>&1
+          sudo apt-get install -y -qq bison musl-tools >/dev/null 2>&1
           (cd src && .github/scripts/build-tmux.sh ../tmux-out) > tmux-build.log 2>&1 || { tail -5 tmux-build.log; exit 1; }
       - name: Attach bench (ref B; output withheld except the table)
         id: attach

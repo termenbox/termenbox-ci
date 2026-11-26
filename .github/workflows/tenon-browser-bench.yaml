@@ -90,7 +90,7 @@ jobs:
       - name: Build the pinned tmux (pinned sources, static)
         if: inputs.variant != 'frames' && steps.tmux.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get install -y -qq bison >/dev/null 2>&1
+          sudo apt-get install -y -qq bison musl-tools >/dev/null 2>&1
           (cd src && .github/scripts/build-tmux.sh ../tmux-out) > tmux-build.log 2>&1 || { tail -5 tmux-build.log; exit 1; }
       - name: Build the wasm core, the server and the client(s) (output withheld)
         id: build
