@@ -1,0 +1,94 @@
+name: Deploy control plane (staging)
+run-name: "Deploy control plane staging · ${{ inputs.sha || 'head of develop' }}"
+# Deploys a STAGING copy of the organisation control plane Worker (`--env staging`) to the Cloudflare account named by the
+# STAGING_CLOUDFLARE_* secrets of the cloud environment. It holds synthetic organisations for a drill and never a real one.
+# Same approval and same temporary-key rule as deploy-control.
+# The job sits in the `cloud` environment, whose required reviewer is the owner: nothing runs until they approve. The Worker's
+# signing secret (POLICY_SIGNER) belongs to the owner: when the Worker has none, this workflow makes a temporary key, puts it in
+# as the secret through stdin and prints only its public half. The owner replaces it with their own `wrangler secret put
+# POLICY_SIGNER` before any server is claimed: a box that already trusts the temporary key accepts a new one only inside a
+# policy the old key signed. Only status lines are printed, never wrangler's raw output.
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Source commit to deploy; empty means the head of develop'
+        type: string
+        required: false
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: deploy-control-staging
+jobs:
+  deploy:
+    name: Deploy control plane staging (cloud)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: cloud
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.STAGING_CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER: wrangler@3.114.0
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+        with:
+          sha: ${{ inputs.sha }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Credentials are set
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "the cloud environment lacks STAGING_CLOUDFLARE_API_TOKEN or STAGING_CLOUDFLARE_ACCOUNT_ID"; exit 1; }
+      - name: Control plane tests
+        working-directory: packages/control
+        run: |
+          npm install --no-audit --no-fund --ignore-scripts >/dev/null 2>&1 || { echo "npm install failed"; exit 1; }
+          npx vitest run 2>&1 | tail -6
+      - name: Database and bucket exist
+        working-directory: packages/control
+        run: |
+          # wrangler's `d1 info <name>` reads the binding in wrangler.toml, whose id is still the placeholder, so it
+          # cannot find a database that exists. Look the database up by name through the API instead (an id is an
+          # identifier, not a secret). A failure prints wrangler's error lines with ids masked, nothing else.
+          why() { grep -iE 'error|✘|code:|authenticat|permission|account|not found|already' | grep -v WARNING | sed -E 's/[0-9a-f]{32}/<id>/g' | head -6 | cut -c1-200; }
+          lookup() { curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database?name=termenbox-control-staging" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=(JSON.parse(s).result||[]).find(d=>d.name==="termenbox-control-staging");console.log(r?r.uuid:"")})'; }
+          id=$(lookup) || { echo "database lookup failed"; exit 1; }
+          if [ -z "$id" ]; then
+            echo "database: not there yet, creating"
+            out=$(npx --yes "$WRANGLER" d1 create termenbox-control-staging 2>&1) || { echo "d1 create failed"; printf '%s\n' "$out" | why; exit 1; }
+            id=$(lookup) || { echo "database lookup failed"; exit 1; }
+          fi
+          case "$id" in ????????-????-????-????-????????????) ;; *) echo "no database id"; exit 1;; esac
+          sed -i "s/SET-BY-THE-DEPLOY-WORKFLOW/$id/" wrangler.toml
+          grep -q SET-BY-THE-DEPLOY-WORKFLOW wrangler.toml && { echo "the id was not substituted"; exit 1; }
+          # The schema is written with IF NOT EXISTS: running it again changes nothing.
+          out=$(npx --yes "$WRANGLER" d1 execute termenbox-control-staging --env staging --remote --file schema.sql 2>&1) || { echo "schema failed"; printf '%s\n' "$out" | why; exit 1; }
+          out=$(npx --yes "$WRANGLER" r2 bucket create termenbox-control-staging --jurisdiction eu 2>&1) || { echo "bucket: not created (it may exist)"; printf '%s\n' "$out" | why; }
+          echo "database and bucket ready"
+      - name: Deploy
+        id: deploy
+        working-directory: packages/control
+        run: |
+          out=$(npx --yes "$WRANGLER" deploy --env staging 2>&1) || { echo "deploy failed"; printf '%s\n' "$out" | grep -iE 'error|✘|code:|authenticat|permission|account' | grep -v WARNING | sed -E 's/[0-9a-f]{32}/<id>/g' | head -8 | cut -c1-200; exit 1; }
+          url=$(printf '%s\n' "$out" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | head -n1)
+          [ -n "$url" ] || { echo "no address in the deploy output"; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "control plane: $url"
+      - name: Policy signing key
+        working-directory: packages/control
+        run: |
+          if npx --yes "$WRANGLER" secret list --env staging 2>/dev/null | grep -q '"POLICY_SIGNER"'; then echo "signing key: already set"; exit 0; fi
+          key=$(openssl genpkey -algorithm ed25519 -outform DER | base64 -w0)
+          printf '%s' "$key" | npx --yes "$WRANGLER" secret put POLICY_SIGNER --env staging >/dev/null 2>&1 || { echo "secret POLICY_SIGNER failed"; exit 1; }
+          pub=$(printf '%s' "$key" | base64 -d | openssl pkey -inform DER -pubout -outform DER | tail -c 32 | base64 -w0)
+          echo "signing key: temporary, public half $pub"
+          echo "replace it with your own before claiming a server"
+      - name: Health
+        run: |
+          sleep 5
+          code=$(curl -s -o /dev/null -w '%{http_code}' "${{ steps.deploy.outputs.url }}/v1/health")
+          echo "health: $code"
+          [ "$code" = 200 ]
