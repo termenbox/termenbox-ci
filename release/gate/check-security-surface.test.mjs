@@ -10,10 +10,10 @@ const roots = [];
 const MAP_HEAD = '| Id | Edge | Exposure | Controls | Shell w/o factor? | Gaps | Walked |\n|---|---|---|---|---|---|---|\n';
 const GOOD_MAP_ROWS = [
   '| P2 | Functions: `api/me/{servers}` | public | signed | no: signed | | yes |',
-  '| O1 | Server port | public | x | no: handshake | SR-2026-1 | yes |',
+  '| O1 | Server port | public | x | no: handshake | SR-A1 | yes |',
 ];
 const REG_HEAD = '| Resource | Limit | Who | Cap | Gaps | Walked |\n|---|---|---|---|---|---|\n';
-const GOOD_REG_ROWS = ['| Workers | 100k/day | anyone | per-source cap; quota alarm of DECISION-0064 | | yes |'];
+const GOOD_REG_ROWS = ['| Workers | 100k/day | anyone | per-source cap; the quota alarm | | yes |'];
 
 function fixture({ map = GOOD_MAP_ROWS, register = GOOD_REG_ROWS, edges = 'packages/a.rs O1\npackages/client/functions/** P2\n', routes = ['me/servers'], exempt = '', files = [] } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'security-surface-'));
@@ -87,7 +87,7 @@ describe('check-security-surface', () => {
   });
 
   it('public_map_has_only_opaque_gap_ids: a list of ids passes', () => {
-    const root = fixture({ map: [GOOD_MAP_ROWS[0], '| O1 | Server port | public | x | no: handshake | SR-2026-1, SR-2026-2 | yes |'] });
+    const root = fixture({ map: [GOOD_MAP_ROWS[0], '| O1 | Server port | public | x | no: handshake | SR-A1, SR-A2 | yes |'] });
     assert.deepEqual(scan(root), []);
   });
 
@@ -97,7 +97,7 @@ describe('check-security-surface', () => {
   });
 
   it('every_quota_row_has_an_alarm: a recorded finding or an unused resource is exempt', () => {
-    const root = fixture({ register: ['| R2 | 1M/month | anyone | Not used today | | yes |', '| D1 | 5M/day | anyone | none | SR-2026-7 | yes |'] });
+    const root = fixture({ register: ['| R2 | 1M/month | anyone | Not used today | | yes |', '| D1 | 5M/day | anyone | none | SR-A7 | yes |'] });
     assert.deepEqual(scan(root), []);
   });
 });

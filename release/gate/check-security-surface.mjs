@@ -3,11 +3,11 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-// Guardrails `no-shell-without-a-user-factor`, `open-security-findings-stay-private-until-fixed` and
-// `every-unauthenticated-edge-declares-its-caps`: the public attack-surface map (FACT-0079) and resource
-// register (FACT-0080) must answer every edge, hold only opaque ids in their Gaps cells, and name an alarm for
+// The rules that no shell opens without a user factor, that open security findings stay private until fixed and that
+// every unauthenticated edge declares its caps: the public attack-surface map and resource
+// register must answer every edge, hold only opaque ids in their Gaps cells, and name an alarm for
 // every shared quota. With `--changed <file>` it also writes the comment for a pull request that touches a path
-// listed in `.github/security-edges.txt` (DECISION-0199).
+// listed in `.github/security-edges.txt`.
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const EDGES = '.github/security-edges.txt';
@@ -171,7 +171,7 @@ export function scan(root = REPO_ROOT) {
     if (row.cells.some((cell) => cell === '?')) issues.push(`map row ${id} still has a "?"`);
   }
   for (const edge of edges) {
-    for (const id of edge.ids) if (!byId.has(id)) issues.push(`${EDGES}: "${edge.glob}" names row ${id}, which FACT-0079 does not have`);
+    for (const id of edge.ids) if (!byId.has(id)) issues.push(`${EDGES}: "${edge.glob}" names row ${id}, which the attack-surface map does not have`);
   }
   const p2 = byId.get('P2')?.cells.join(' ') ?? '';
   for (const route of routeFiles(root)) {
@@ -179,7 +179,7 @@ export function scan(root = REPO_ROOT) {
   }
 
   // public_map_has_only_opaque_gap_ids
-  for (const [label, text] of [['FACT-0079', map], ['FACT-0080', register]]) {
+  for (const [label, text] of [['attack-surface map', map], ['resource register', register]]) {
     if (!text) continue;
     for (const row of tableRows(text)) {
       const gaps = row.cells.at(-2) ?? '';
@@ -212,7 +212,7 @@ export function commentFor(edges, paths) {
     '',
     `Rows to re-read: ${ids.join(', ') || 'none named'}.`,
     'If it adds or changes a listener, route, credential, workflow trigger, publishing path or dependency class, update the row in',
-    '`docs/facts/0079-*.md` in this pull request (GUARDRAIL no-shell-without-a-user-factor).',
+    '`docs/facts/0079-*.md` in this pull request (the rule that no shell opens without a user factor).',
     '',
     ...hit.map((edge) => `- \`${edge.glob}\``),
     '',

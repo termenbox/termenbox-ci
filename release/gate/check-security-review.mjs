@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { globToRegExp, parseEdges } from './check-security-surface.mjs';
 
-// Guardrail `a-release-needs-its-security-review-closed`: the release gate. Usage:
+// The release gate for a closed security review. Usage:
 //   node scripts/check-security-review.mjs <release-commit> [--today YYYY-MM-DD]
 // It reads docs/security-review.json and .github/security-edges.txt at the release commit (and the edge list at the
 // reviewed commit) and exits non-zero unless the counts are closed, the release commit is on origin/master, the
@@ -86,7 +86,7 @@ export function evaluateDetailed({ counts, edgeGlobs, commit, today, git }) {
     const unknown = counts.existential_open === null || counts.trust_ending_open === null;
     if (unknown || !fix) issues.push('findings are open or never counted and this is not a fix release');
   }
-  // Decision 0282 and 2.8: the gate runs before the cut moves master, so the candidate is not on master yet. Master must be
+  // The gate runs before the cut moves master, so the candidate is not on master yet. Master must be
   // an ancestor of the candidate (a fast-forward is possible) and the candidate must be on develop.
   if (!git.isAncestor('refs/remotes/origin/master', commit)) issues.push('origin/master is not an ancestor of the release commit: master cannot fast-forward to it');
   if (!git.isAncestor(commit, 'refs/remotes/origin/develop')) issues.push('the release commit is not on origin/develop');

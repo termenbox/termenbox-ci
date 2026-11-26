@@ -83,8 +83,8 @@ def thaws(candidate, manifest_path):
 
 
 def next_patch(tags, crate):
-    """The version a cut build gets (decision 0282): the highest `N` among every tag of the `X.Y` line of the crate
-    (stable or beta, exact patterns only, decision 0133), plus one. A number a halted build spent is never reused, so a
+    """The version a cut build gets (the cut job assigns it): the highest `N` among every tag of the `X.Y` line of the crate
+    (stable or beta, exact patterns only), plus one. A number a halted build spent is never reused, so a
     beta tag counts. A line with no tag yet starts at the crate's own patch."""
     c = re.fullmatch(CORE, crate)
     if not c:
