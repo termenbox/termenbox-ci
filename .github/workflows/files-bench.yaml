@@ -12,7 +12,7 @@ on:
         description: Source ref to measure (a branch, tag or sha of termenbox-source)
         default: feat/file-manager-2
       which:
-        description: Scenarios to run, a list of huge-list, huge-transfer, tasks-ops, tasks-transfer
+        description: Scenarios to run, a list of huge-list, huge-transfer, tasks-ops, tasks-transfer, budget
         default: 'huge-list,tasks-ops,huge-transfer,tasks-transfer'
       rounds:
         description: Rounds of each scenario (each takes the median of 5 runs itself)
@@ -91,10 +91,11 @@ jobs:
                 huge-transfer) cmd="e2e/files-huge.mjs --only transfer" ;;
                 tasks-ops) cmd="e2e/files-tasks.mjs --only ops" ;;
                 tasks-transfer) cmd="e2e/files-tasks.mjs --only transfer" ;;
+                budget) cmd="e2e/files-budget.mjs" ;;
                 *) echo "unknown scenario $w"; rc=1; continue ;;
               esac
               node $cmd > ../../../one.out 2>> ../../../bench.err || { echo "scenario $w failed a threshold or crashed"; rc=1; }
-              grep -E '^(bench |HUGE |TASKS )' ../../../one.out | sed "s/^/round=$i $w /" | tee -a ../../../rows.txt
+              grep -E '^(bench |HUGE |TASKS |BUDGET )' ../../../one.out | sed "s/^/round=$i $w /" | tee -a ../../../rows.txt
             done
             i=$((i + 1))
           done
