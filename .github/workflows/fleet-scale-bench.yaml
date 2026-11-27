@@ -40,6 +40,10 @@ on:
         description: Play the status over the binary status lane (the page runs with the lane setting on); false is the legacy text frame
         type: boolean
         default: false
+      painter:
+        description: Draw the list with the pooled row painter (the page runs with the painter setting on); false is the Svelte rows
+        type: boolean
+        default: false
       profile:
         description: Run each size with a V8 CPU profile and a scroll pass; prints the profile, elements_by and scroll rows (round 1 only)
         type: boolean
@@ -97,9 +101,11 @@ jobs:
           PROFILE: ${{ inputs.profile }}
           ASKS: ${{ inputs.asks }}
           LANE: ${{ inputs.lane }}
+          PAINTER: ${{ inputs.painter }}
         run: |
           set +e
           LANE_FLAG=''; [ "$LANE" = true ] && LANE_FLAG=--lane
+          [ "$PAINTER" = true ] && LANE_FLAG="$LANE_FLAG --painter"
           echo "runner: $(nproc) cores, load $(cut -d' ' -f1-3 /proc/loadavg), $(google-chrome --version 2>/dev/null)"
           cd src/packages/client
           : > ../../../rows.txt
