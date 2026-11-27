@@ -25,6 +25,11 @@ on:
         description: Extra add-server journeys after the weekly reading (0 to 10), to count how often the bounce appears on this binary
         type: string
         default: '0'
+      pace:
+        description: Pace of the repeated add-server journeys. slow stretches every delay of the case by 1.6, to tell a delay-induced bounce from a fixed one
+        type: choice
+        options: [normal, slow]
+        default: normal
 
 permissions:
   contents: read
@@ -175,13 +180,14 @@ jobs:
         if: always() && inputs.repeat != '' && inputs.repeat != '0'
         env:
           N: ${{ inputs.repeat }}
+          PACE: ${{ inputs.pace }}
         run: |
           case "$N" in [1-9]|10) ;; *) echo "repeat must be 1 to 10"; exit 1 ;; esac
           pass=0
           for i in $(seq "$N"); do
-            if node scripts/docs-journey.mjs --chapters 2 --force > "$RUNNER_TEMP/repeat-$i.txt" 2>&1; then pass=$((pass+1)); else echo "run $i failed: $(grep -o '"tail":"[^"]*"' "$RUNNER_TEMP/repeat-$i.txt" | head -1 | cut -c1-300)"; fi
+            if node scripts/docs-journey.mjs --chapters 2 --force ${PACE:+--pace "$PACE"} > "$RUNNER_TEMP/repeat-$i.txt" 2>&1; then pass=$((pass+1)); else echo "run $i failed: $(grep -o '"tail":"[^"]*"' "$RUNNER_TEMP/repeat-$i.txt" | head -1 | cut -c1-300)"; fi
           done
-          echo "add-server on ${{ inputs.binary }}: $pass of $N passed" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "add-server on ${{ inputs.binary }}, pace ${PACE:-normal}: $pass of $N passed" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - if: always()
         id: finish
