@@ -66,7 +66,9 @@ jobs:
           grep -q SET-BY-THE-DEPLOY-WORKFLOW wrangler.toml && { echo "the id was not substituted"; exit 1; }
           # The schema is written with IF NOT EXISTS: running it again changes nothing.
           out=$(npx --yes "$WRANGLER" d1 execute termenbox-control-staging --env staging --remote --file schema.sql 2>&1) || { echo "schema failed"; printf '%s\n' "$out" | why; exit 1; }
-          out=$(npx --yes "$WRANGLER" r2 bucket create termenbox-control-staging --jurisdiction eu 2>&1) || { echo "bucket: not created (it may exist)"; printf '%s\n' "$out" | why; }
+          if out=$(npx --yes "$WRANGLER" r2 bucket create termenbox-control-staging --jurisdiction eu 2>&1); then echo "bucket: created"
+          elif printf '%s\n' "$out" | grep -q 'already exists'; then echo "bucket: already there"
+          else echo "bucket: not created"; printf '%s\n' "$out" | why; exit 1; fi
           echo "database and bucket ready"
       - name: Deploy
         id: deploy
