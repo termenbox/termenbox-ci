@@ -25,6 +25,11 @@ on:
         description: Extra add-server journeys after the weekly reading (0 to 10), to count how often the bounce appears on this binary
         type: string
         default: '0'
+      variant:
+        description: 'Variant of the repeated add-server journeys, to find what the bounce depends on. slow stretches every case delay by 1.6; no-stills takes no screenshot; late-still waits 1.5 s more before it'
+        type: choice
+        options: [normal, slow, no-stills, late-still]
+        default: normal
 
 permissions:
   contents: read
@@ -175,13 +180,15 @@ jobs:
         if: always() && inputs.repeat != '' && inputs.repeat != '0'
         env:
           N: ${{ inputs.repeat }}
+          VARIANT: ${{ inputs.variant }}
         run: |
           case "$N" in [1-9]|10) ;; *) echo "repeat must be 1 to 10"; exit 1 ;; esac
+          pace=; case "$VARIANT" in slow) pace=slow ;; no-stills|late-still) export VIDEO_BISECT="$VARIANT" ;; esac
           pass=0
           for i in $(seq "$N"); do
-            if node scripts/docs-journey.mjs --chapters 2 --force > "$RUNNER_TEMP/repeat-$i.txt" 2>&1; then pass=$((pass+1)); else echo "run $i failed: $(grep -o '"tail":"[^"]*"' "$RUNNER_TEMP/repeat-$i.txt" | head -1 | cut -c1-300)"; fi
+            if node scripts/docs-journey.mjs --chapters 2 --force ${pace:+--pace "$pace"} > "$RUNNER_TEMP/repeat-$i.txt" 2>&1; then pass=$((pass+1)); else echo "run $i failed: $(grep -o '"tail":"[^"]*"' "$RUNNER_TEMP/repeat-$i.txt" | head -1 | cut -c1-300)"; fi
           done
-          echo "add-server on ${{ inputs.binary }}: $pass of $N passed" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "add-server on ${{ inputs.binary }}, variant ${VARIANT:-normal}: $pass of $N passed" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - if: always()
         id: finish
