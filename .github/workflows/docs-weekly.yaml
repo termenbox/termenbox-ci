@@ -21,6 +21,10 @@ on:
         type: choice
         options: [release, build]
         default: release
+      repeat:
+        description: Extra add-server journeys after the weekly reading (0 to 10), to count how often the bounce appears on this binary
+        type: string
+        default: '0'
 
 permissions:
   contents: read
@@ -154,9 +158,30 @@ jobs:
             GH_TOKEN="$DOCS_TOKEN" gh pr create --base develop --head "$branch" --title "docs(outcomes): the docs scorecard row of $day" --body-file "$RUNNER_TEMP/pr.md"
           fi
 
+      # The meters run under quiet, so a red reading must name itself: the failing chapters and their output tails go to the log.
       - name: Fail when a reading failed
         if: steps.read.outputs.rc != '0'
-        run: exit 1
+        run: |
+          grep -q 'every surface shows' "$RUNNER_TEMP/surfaces.txt" || echo "::error title=surfaces::$(tr '\n' ' ' < "$RUNNER_TEMP/surfaces.txt" | cut -c1-900)"
+          node -e '
+            const l = require("fs").readFileSync(process.env.RUNNER_TEMP + "/journey.txt", "utf8").split("\n").find((x) => x.startsWith("JOURNEY "));
+            if (!l) { console.log("::error title=journey::no JOURNEY line"); process.exit(0); }
+            for (const c of JSON.parse(l.slice(8)).chapters.filter((x) => x.status !== "pass"))
+              for (const r of c.runs) console.log("::error title=journey chapter " + c.chapter + " " + c.case + "::" + r.seconds + "s " + String(r.tail || "").replace(/\s+/g, " ").slice(0, 900));
+          '
+          exit 1
+
+      - name: Repeat add-server to count the bounce
+        if: always() && inputs.repeat != '' && inputs.repeat != '0'
+        env:
+          N: ${{ inputs.repeat }}
+        run: |
+          case "$N" in [1-9]|10) ;; *) echo "repeat must be 1 to 10"; exit 1 ;; esac
+          pass=0
+          for i in $(seq "$N"); do
+            if node scripts/docs-journey.mjs --chapters 2 --force > "$RUNNER_TEMP/repeat-$i.txt" 2>&1; then pass=$((pass+1)); else echo "run $i failed: $(grep -o '"tail":"[^"]*"' "$RUNNER_TEMP/repeat-$i.txt" | head -1 | cut -c1-300)"; fi
+          done
+          echo "add-server on ${{ inputs.binary }}: $pass of $N passed" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - if: always()
         id: finish
