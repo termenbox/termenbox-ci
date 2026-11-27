@@ -355,6 +355,12 @@ jobs:
           npm install --no-audit --no-fund
           npm test
 
+      # The Windows shell's rules (links, count, keychain slot) are plain Rust in a crate of their own, so they
+      # test on any runner without WebView2; the shell itself compiles only in termenbox-native-ci.
+      - name: Test the Tauri shell's logic crate
+        working-directory: packages/native/tauri/logic
+        run: cargo test --locked
+
       - if: always()
         id: finish
         uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
