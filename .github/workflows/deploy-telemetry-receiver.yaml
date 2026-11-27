@@ -66,16 +66,23 @@ jobs:
           [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ] || { echo "the cloud environment lacks CLOUDFLARE_ACCOUNT_ID (the state backend)"; exit 1; }
           echo "credentials present"
       - name: Receiver tests
+        working-directory: packages/telemetry
         run: |
-          node --test packages/telemetry/ 2>&1 | tail -6
+          node --test 2>&1 | tail -8
+          test "${PIPESTATUS[0]}" -eq 0
       - name: Build the receiver bundle
         working-directory: packages/client
         run: |
           # The receiver imports only source files of this repository, so no install is needed: wrangler only bundles.
+          # --outdir, not --outfile: wrangler 4 writes the multipart upload body to an --outfile, which is not a Worker.
           export WRANGLER_SEND_METRICS=false
-          out=$(npx --yes "$WRANGLER" deploy --dry-run --config ../../infra/telemetry-receiver/wrangler.toml --outfile ../../infra/telemetry-receiver/worker.js 2>&1) || { echo "bundle failed"; printf '%s\n' "$out" | grep -iE 'error|✘' | head -6 | cut -c1-200; exit 1; }
-          test -s ../../infra/telemetry-receiver/worker.js
-          echo "bundle built: $(wc -c < ../../infra/telemetry-receiver/worker.js) bytes"
+          dest=../../infra/telemetry-receiver
+          rm -rf "$dest/.bundle"
+          out=$(npx --yes "$WRANGLER" deploy --dry-run --config "$dest/wrangler.toml" --outdir "$dest/.bundle" 2>&1) || { echo "bundle failed"; printf '%s\n' "$out" | grep -iE 'error|✘' | head -6 | cut -c1-200; exit 1; }
+          mv "$dest/.bundle/index.js" "$dest/worker.js"
+          test -s "$dest/worker.js"
+          if grep -q '^------formdata' "$dest/worker.js"; then echo "worker.js is an upload body, not a Worker"; exit 1; fi
+          echo "bundle built: $(wc -c < "$dest/worker.js") bytes"
       - name: Terraform init
         working-directory: infra/telemetry-receiver
         run: |
