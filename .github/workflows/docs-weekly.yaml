@@ -1,0 +1,148 @@
+name: Docs Weekly
+
+# The three docs readings of the outcome docs-quality-and-onboarding (R151): the live surfaces show the decided install command
+# (check-docs-surfaces), a reader's first hour works from the public installer (docs-journey: chapter 1 in a fresh Docker-in-Docker
+# container, chapters 2 to 4 headless through the video renderer), and the scorecard row with its regressions (docs-scorecard).
+# Weekly and on demand. The journey uses no prepared state: the server binary is the latest beta from the public download host, the
+# same bytes a reader runs. The new scorecard row lands as a pull request to develop (a pull request opened with the workflow token
+# would not start CI), the journey reading goes in the pull request body and the job summary.
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Channel the journey installs from
+        type: choice
+        options: [beta, stable]
+        default: beta
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: quiet {0}
+
+concurrency:
+  group: docs-weekly
+  cancel-in-progress: false
+
+jobs:
+  weekly:
+    environment: docs
+    name: Surfaces, journey and scorecard
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      fail: ${{ steps.finish.outputs.summary }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/setup-quiet@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+        with:
+          sha: ${{ github.event.client_payload.sha }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          depth: '0'
+          fetch: develop
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install the browser
+        working-directory: packages/client
+        run: pnpm exec playwright-core install --with-deps chromium
+
+      - name: Build the client and its e2e pages
+        working-directory: packages/client
+        run: pnpm run e2e:build
+
+      - name: Fetch the server binary a reader would run
+        env:
+          CHANNEL: ${{ inputs.channel || 'beta' }}
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/manifest.json" "https://dl.termenbox.dev/$CHANNEL/manifest.json"
+          url=$(jq -r .binaries.x86_64.url "$RUNNER_TEMP/manifest.json"); sum=$(jq -r .binaries.x86_64.sha256 "$RUNNER_TEMP/manifest.json")
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/termenbox-server" "$url"
+          echo "$sum  $RUNNER_TEMP/termenbox-server" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/termenbox-server"
+          echo "TERMENBOX_BIN=$RUNNER_TEMP/termenbox-server" >> "$GITHUB_ENV"
+
+      # The three readings run to the end even when one fails, so the scorecard always gets its row; the job fails afterwards.
+      - name: Read the three meters
+        id: read
+        env:
+          CHANNEL: ${{ inputs.channel || 'beta' }}
+        run: |
+          rc=0
+          node scripts/check-docs-surfaces.mjs > "$RUNNER_TEMP/surfaces.txt" 2>&1 || { rc=1; echo "surface check failed"; }
+          cat "$RUNNER_TEMP/surfaces.txt"
+          node scripts/docs-journey.mjs --channel "$CHANNEL" > "$RUNNER_TEMP/journey.txt" 2>&1 || { rc=1; echo "journey failed"; }
+          cat "$RUNNER_TEMP/journey.txt"
+          node scripts/docs-scorecard.mjs --write --base refs/remotes/origin/develop~1 | tee "$RUNNER_TEMP/scorecard.txt"
+          {
+            echo '### Docs weekly'
+            echo; echo 'Surfaces:'; echo '```'; cat "$RUNNER_TEMP/surfaces.txt"; echo '```'
+            echo; echo 'Journey:'; echo '```'; grep '^JOURNEY' "$RUNNER_TEMP/journey.txt" || echo 'no JOURNEY line'; echo '```'
+            echo; echo 'Scorecard:'; echo '```'; cat "$RUNNER_TEMP/scorecard.txt"; echo '```'
+          } > "$RUNNER_TEMP/summary.md"
+          cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - id: docs-pub
+        name: Token to push the scorecard branch and open its pull request
+        uses: termenbox/termenbox-ci/.github/actions/app-token@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+        with:
+          app-id: ${{ secrets.PUBLISHER_APP_ID }}
+          app-key: ${{ secrets.PUBLISHER_APP_KEY }}
+          repository: termenbox/termenbox-source
+          permissions: '{"contents":"write","pull_requests":"write"}'
+      - name: Land the new scorecard row as a pull request
+        env:
+          DOCS_TOKEN: ${{ steps.docs-pub.outputs.token }}
+          GH_REPO: termenbox/termenbox-source
+        run: |
+          if git diff --quiet -- docs/outcomes/data/docs-scorecard.md; then echo "no new row"; exit 0; fi
+          day=$(date -u +%Y-%m-%d)
+          branch="docs/scorecard-$day"
+          case "$branch" in docs/scorecard-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) echo "refusing to push $branch"; exit 1 ;; esac
+          git config user.name "docs-weekly[bot]"
+          git config user.email "docs-weekly-bot@users.noreply.github.com"
+          git switch -c "$branch" refs/remotes/origin/develop
+          git add docs/outcomes/data/docs-scorecard.md
+          git commit -m "docs(outcomes): the docs scorecard row of $day" -m "Why: the weekly run of the docs quality meters (outcome docs-quality-and-onboarding)." -m "What: appends one row to the scorecard record and updates its regression ledger."
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$DOCS_TOKEN" | base64 -w0)" push --force origin "refs/heads/$branch:refs/heads/$branch"
+          url=$(GH_TOKEN="$DOCS_TOKEN" gh pr list --head "$branch" --state open --json url --jq '.[0].url // empty')
+          if [ -z "$url" ]; then
+            { printf 'Why: the weekly run of the docs quality meters (outcome docs-quality-and-onboarding).\n\nWhat: appends one row to the scorecard record.\n\n'; cat "$RUNNER_TEMP/summary.md"; } > "$RUNNER_TEMP/pr.md"
+            GH_TOKEN="$DOCS_TOKEN" gh pr create --base develop --head "$branch" --title "docs(outcomes): the docs scorecard row of $day" --body-file "$RUNNER_TEMP/pr.md"
+          fi
+
+      - name: Fail when a reading failed
+        if: steps.read.outputs.rc != '0'
+        run: exit 1
+
+      - if: always()
+        id: finish
+        uses: termenbox/termenbox-ci/.github/actions/finish@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+        with:
+          key: ${{ secrets.LOG_KEY }}
+          name: weekly-${{ strategy.job-index }}
+          status: ${{ job.status }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+          secrets: |-
+            ${{ secrets.LOG_KEY }}
+            ${{ secrets.REPORTER_APP_KEY }}
