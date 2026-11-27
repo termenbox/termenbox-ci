@@ -1,0 +1,113 @@
+name: Deploy telemetry receiver
+run-name: "Deploy telemetry receiver · ${{ inputs.action }} · ${{ inputs.sha || 'head of develop' }}"
+# Plans or applies infra/telemetry-receiver of the source: the product telemetry receiver Worker and its D1 counts
+# database, in the owner's SECOND Cloudflare account (kept apart so telemetry traffic does not spend the main account's
+# Workers request quota). The job sits in the
+# `cloud` environment, whose required reviewer is the owner: nothing runs until they approve. The Terraform state lives in
+# the R2 bucket of the main account (the same backend as deploy-infra), so the backend credentials are the main account's
+# and the provider token is the second account's. Only status lines are printed, never Terraform's variable values.
+# Secrets in the `cloud` environment: TELEMETRY_CLOUDFLARE_API_TOKEN, TELEMETRY_CLOUDFLARE_ACCOUNT_ID, HONEYCOMB_API_KEY,
+# INTERNAL_KEY; BOARD_READ_TOKEN is a repository secret (the board reads the same value); CLOUDFLARE_ACCOUNT_ID,
+# R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are the backend's.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+      sha:
+        description: 'Source commit to deploy; empty means the head of develop'
+        type: string
+        required: false
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: deploy-telemetry-receiver
+jobs:
+  terraform:
+    name: Terraform ${{ inputs.action }} (telemetry receiver)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: cloud
+    env:
+      TF_VERSION: '1.9'
+      WRANGLER: wrangler@4.158.0
+      TF_VAR_telemetry_cloudflare_api_token: ${{ secrets.TELEMETRY_CLOUDFLARE_API_TOKEN }}
+      TF_VAR_telemetry_account_id: ${{ secrets.TELEMETRY_CLOUDFLARE_ACCOUNT_ID }}
+      TF_VAR_honeycomb_ingest_key: ${{ secrets.HONEYCOMB_API_KEY }}
+      TF_VAR_internal_key: ${{ secrets.INTERNAL_KEY }}
+      TF_VAR_board_read_token: ${{ secrets.BOARD_READ_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_EC2_METADATA_DISABLED: 'true'
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+        with:
+          sha: ${{ inputs.sha }}
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Credentials are set
+        run: |
+          for v in TF_VAR_telemetry_cloudflare_api_token TF_VAR_telemetry_account_id TF_VAR_honeycomb_ingest_key TF_VAR_internal_key TF_VAR_board_read_token AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            [ -n "${!v}" ] || { echo "the cloud environment lacks the secret behind $v"; exit 1; }
+          done
+          [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ] || { echo "the cloud environment lacks CLOUDFLARE_ACCOUNT_ID (the state backend)"; exit 1; }
+          echo "credentials present"
+      - name: Receiver tests
+        working-directory: packages/telemetry
+        run: |
+          node --test 2>&1 | tail -8
+          test "${PIPESTATUS[0]}" -eq 0
+      - name: Build the receiver bundle
+        working-directory: packages/client
+        run: |
+          # The receiver imports only source files of this repository, so no install is needed: wrangler only bundles.
+          # --outdir, not --outfile: wrangler 4 writes the multipart upload body to an --outfile, which is not a Worker.
+          export WRANGLER_SEND_METRICS=false
+          dest=../../infra/telemetry-receiver
+          rm -rf "$dest/.bundle"
+          out=$(npx --yes "$WRANGLER" deploy --dry-run --config "$dest/wrangler.toml" --outdir "$dest/.bundle" 2>&1) || { echo "bundle failed"; printf '%s\n' "$out" | grep -iE 'error|✘' | head -6 | cut -c1-200; exit 1; }
+          mv "$dest/.bundle/index.js" "$dest/worker.js"
+          test -s "$dest/worker.js"
+          if grep -q '^------formdata' "$dest/worker.js"; then echo "worker.js is an upload body, not a Worker"; exit 1; fi
+          echo "bundle built: $(wc -c < "$dest/worker.js") bytes"
+      - name: Terraform init
+        working-directory: infra/telemetry-receiver
+        run: |
+          terraform init -input=false \
+            -backend-config="endpoint=https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com" \
+            -backend-config="access_key=$AWS_ACCESS_KEY_ID" \
+            -backend-config="secret_key=$AWS_SECRET_ACCESS_KEY" >/dev/null 2>&1 || { echo "terraform init failed"; exit 1; }
+          echo "terraform init ok"
+      - name: Terraform plan
+        working-directory: infra/telemetry-receiver
+        run: |
+          terraform plan -input=false -no-color -out=tfplan 2>&1 | grep -vE 'api_token|key|secret|token' | tail -40
+          test "${PIPESTATUS[0]}" -eq 0
+      - name: Terraform apply
+        if: inputs.action == 'apply'
+        working-directory: infra/telemetry-receiver
+        run: |
+          terraform apply -input=false -no-color tfplan 2>&1 | grep -vE 'api_token|key|secret|token' | tail -20
+          test "${PIPESTATUS[0]}" -eq 0
+      - name: Receiver answers
+        if: inputs.action == 'apply'
+        run: |
+          sub=$(curl -fsS -H "Authorization: Bearer ${TF_VAR_telemetry_cloudflare_api_token}" "https://api.cloudflare.com/client/v4/accounts/${TF_VAR_telemetry_account_id}/workers/subdomain" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).result?.subdomain||""))') || sub=""
+          [ -n "$sub" ] || { echo "no workers.dev subdomain set on the account"; exit 1; }
+          url="https://termenbox-telemetry.${sub}.workers.dev/v1/event"
+          sleep 5
+          echo "event endpoint: $url"
+          echo "GET status: $(curl -s -o /dev/null -w '%{http_code}' "$url")"
