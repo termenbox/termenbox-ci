@@ -16,6 +16,11 @@ on:
         type: choice
         options: [beta, stable]
         default: beta
+      binary:
+        description: Server binary for add-server. release is the one a reader downloads (the default, and the only honest reading); build compiles the checked-out source, to tell a release bug from a source one
+        type: choice
+        options: [release, build]
+        default: release
 
 permissions:
   contents: read
@@ -69,6 +74,7 @@ jobs:
         run: pnpm run e2e:build
 
       - name: Fetch the server binary a reader would run
+        if: inputs.binary != 'build'
         env:
           CHANNEL: ${{ inputs.channel || 'beta' }}
         run: |
@@ -78,6 +84,24 @@ jobs:
           echo "$sum  $RUNNER_TEMP/termenbox-server" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/termenbox-server"
           echo "TERMENBOX_BIN=$RUNNER_TEMP/termenbox-server" >> "$GITHUB_ENV"
+
+      - name: Install Rust toolchain
+        if: inputs.binary == 'build'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        if: inputs.binary == 'build'
+        with:
+          shared-key: rust-ci
+          save-if: false
+
+      - name: Build the server from the source
+        if: inputs.binary == 'build'
+        run: |
+          cargo build --profile ci -p termenbox-server
+          echo "TERMENBOX_BIN=$GITHUB_WORKSPACE/target/ci/termenbox-server" >> "$GITHUB_ENV"
 
       # The three readings run to the end even when one fails, so the scorecard always gets its row; the job fails afterwards.
       - name: Read the three meters
