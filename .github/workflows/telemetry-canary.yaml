@@ -1,0 +1,39 @@
+name: Telemetry canary
+# Every 5 minutes from a hosted runner, outside the project's own machines: sends one canary event to the receiver, then
+# reads the counters back and fails when the board would read UNKNOWN (plan telemetry-gaps 0.6, scenario "the receiver
+# stops counting"). The first run after a gap can fail once, until its canary is counted; a second failure in a row is
+# a real stop. Repository secret: BOARD_READ_TOKEN.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: telemetry-canary
+  cancel-in-progress: false
+jobs:
+  canary:
+    name: Send a canary and read it back
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BOARD_READ_TOKEN: ${{ secrets.BOARD_READ_TOKEN }}
+    steps:
+      - uses: termenbox/termenbox-ci/.github/actions/checkout-private@8a830ae40dc43ed9db9c18a5bc7d30c965eab7c1
+        with:
+          sha: ''
+          app-id: ${{ secrets.REPORTER_APP_ID }}
+          app-key: ${{ secrets.REPORTER_APP_KEY }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Send the canary
+        run: node scripts/telemetry-canary.mjs
+      - name: Read the counters back
+        run: |
+          [ -n "$BOARD_READ_TOKEN" ] || { echo "UNKNOWN: BOARD_READ_TOKEN is not set"; exit 1; }
+          origin=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("packages/telemetry/endpoint.json","utf8")).origin)')
+          export TELEMETRY_COUNTS_URL="$origin/v1/counts"
+          sleep 20
+          node scripts/telemetry-board.mjs
