@@ -1,0 +1,31 @@
+name: Control Health
+
+# The outside check of the hosted control plane. Every run is one reading of control.termenbox.dev from outside
+# Cloudflare; the month's availability is counted from the runs of this workflow.
+# A failed run reaches the owner as any failed run does. It fails when the answer is not ok, or when `alerts` is not 0:
+# the count of billing events that need a look in the last day, plus one while sales stand closed. A number, no identifier.
+# No secret, no checkout, no third-party action.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: control-health
+  cancel-in-progress: false
+
+jobs:
+  health:
+    name: Ask the control plane
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Read /v1/health with the alert count
+        run: |
+          body=$(curl --silent --show-error --fail --max-time 20 --retry 2 --retry-delay 5 'https://control.termenbox.dev/v1/health?alerts=1')
+          echo "$body"
+          echo "$body" | jq -e '.ok == true' >/dev/null || { echo 'health is not ok'; exit 1; }
+          alerts=$(echo "$body" | jq -r '.alerts // "missing"')
+          [ "$alerts" = 0 ] || { echo "alerts: $alerts (a billing event needs a look, sales are closed, or the count could not be read)"; exit 1; }
